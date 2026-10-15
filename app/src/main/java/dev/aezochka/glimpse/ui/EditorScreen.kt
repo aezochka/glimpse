@@ -4,9 +4,22 @@ import android.graphics.Bitmap
 import android.graphics.RectF
 import android.widget.Toast
 import androidx.activity.compose.BackHandler
+import androidx.compose.animation.AnimatedContent
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.ExperimentalMaterial3Api
+import androidx.compose.animation.ExperimentalMaterial3ExpressiveApi
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.scaleIn
+import androidx.compose.animation.scaleOut
+import androidx.compose.animation.slideInVertically
+import androidx.compose.animation.slideOutVertically
+import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.gestures.detectDragGestures
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -16,31 +29,33 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.rounded.ArrowBack
 import androidx.compose.material.icons.rounded.AutoFixHigh
 import androidx.compose.material.icons.rounded.Crop
 import androidx.compose.material.icons.rounded.Flip
 import androidx.compose.material.icons.rounded.RotateRight
 import androidx.compose.material.icons.rounded.Tune
 import androidx.compose.material3.Button
-import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
 import androidx.compose.material3.LoadingIndicator
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.Slider
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -55,6 +70,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.graphics.BlendMode
@@ -71,6 +87,7 @@ import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.dp
@@ -87,7 +104,7 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import kotlin.math.roundToInt
 
-private enum class EditMode { NONE, CROP, FILTER, ADJUST }
+private enum class EditMode { NONE, CROP }
 
 private data class AspectOption(val label: String, val ratio: Float?)
 
@@ -107,8 +124,10 @@ fun EditorScreen(item: MediaItem, onBack: () -> Unit, onSaved: () -> Unit) {
     var aspectLabel by remember { mutableStateOf<String?>(null) }
     var mode by remember { mutableStateOf(EditMode.NONE) }
     var saving by remember { mutableStateOf(false) }
+    var showFilters by remember { mutableStateOf(false) }
+    var showAdjust by remember { mutableStateOf(false) }
 
-    // превью с запечённым поворотом/зеркалом — быстро (лимит 1600px)
+    // превью с запечённым поворотом/зеркалом
     var preview by remember { mutableStateOf<Bitmap?>(null) }
     LaunchedEffect(item.uri, rotation, flip) {
         preview = withContext(Dispatchers.IO) {
@@ -121,6 +140,7 @@ fun EditorScreen(item: MediaItem, onBack: () -> Unit, onSaved: () -> Unit) {
         val m = filterMatrix(filter, brightness, contrast, saturation)
         ColorFilter.colorMatrix(ColorMatrix(m))
     }
+    val anyAdjust = brightness != 0f || contrast != 1f || saturation != 1f
 
     fun doSave() {
         if (saving) return
@@ -145,87 +165,108 @@ fun EditorScreen(item: MediaItem, onBack: () -> Unit, onSaved: () -> Unit) {
 
     BackHandler(onBack = onBack)
 
-    Column(Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background)) {
-        // верхняя панель
+    Box(Modifier.fillMaxSize().background(Color.Black)) {
+        // ---- фото ----
+        val bmp = preview
+        if (bmp == null) {
+            Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                LoadingIndicator(Modifier.size(48.dp))
+            }
+        } else {
+            var boxSize by remember { mutableStateOf(IntSize.Zero) }
+            Box(Modifier.fillMaxSize().onSizeChanged { boxSize = it }) {
+                val disp = remember(bmp, boxSize) { fitRect(boxSize, bmp.width, bmp.height) }
+                val density = LocalDensity.current
+                Box(
+                    Modifier
+                        .offset { IntOffset(disp.left.roundToInt(), disp.top.roundToInt()) }
+                        .size(
+                            with(density) { disp.width.toDp() },
+                            with(density) { disp.height.toDp() },
+                        ),
+                ) {
+                    // поворот/флип «пружинит»: пересоздание превью анимируется
+                    AnimatedContent(
+                        targetState = bmp,
+                        label = "preview",
+                        transitionSpec = {
+                            (scaleIn(Motion.spatial(), initialScale = 0.92f) + fadeIn(Motion.spatial())) togetherWith
+                                (scaleOut(Motion.effects(), targetScale = 0.92f) + fadeOut(Motion.effects()))
+                        },
+                    ) { b ->
+                        Image(
+                            bitmap = b.asImageBitmap(),
+                            contentDescription = null,
+                            contentScale = ContentScale.Fit,
+                            colorFilter = colorFilter,
+                            modifier = Modifier.fillMaxSize(),
+                        )
+                    }
+                    val c = crop
+                    if (mode == EditMode.CROP && c != null) {
+                        CropOverlay(rect = c, onChange = { crop = it })
+                    }
+                }
+            }
+        }
+
+        // ---- верх: пилюли поверх фото ----
         Row(
-            Modifier.fillMaxWidth().padding(horizontal = 4.dp, vertical = 4.dp),
+            Modifier
+                .align(Alignment.TopStart)
+                .statusBarsPadding()
+                .padding(horizontal = 12.dp, vertical = 8.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            IconButton(onClick = onBack) {
-                Icon(Icons.AutoMirrored.Rounded.ArrowBack, "Назад")
+            Surface(
+                color = Color.Black.copy(alpha = 0.45f),
+                shape = RoundedCornerShape(999.dp),
+                modifier = Modifier.pillPress(onBack),
+            ) {
+                Text(
+                    "Отмена",
+                    color = Color.White,
+                    style = MaterialTheme.typography.labelLarge,
+                    modifier = Modifier.padding(horizontal = 16.dp, vertical = 10.dp),
+                )
             }
-            Text(
-                "Редактор",
-                style = MaterialTheme.typography.titleLarge,
-                modifier = Modifier.weight(1f),
-            )
-            Button(onClick = { doSave() }, enabled = !saving && preview != null) {
+        }
+        Row(
+            Modifier
+                .align(Alignment.TopEnd)
+                .statusBarsPadding()
+                .padding(horizontal = 12.dp, vertical = 8.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Button(
+                onClick = { doSave() },
+                enabled = !saving && preview != null,
+                shape = RoundedCornerShape(999.dp),
+            ) {
                 if (saving) {
-                    LoadingIndicator(Modifier.size(24.dp))
+                    LoadingIndicator(Modifier.size(20.dp))
                 } else {
                     Text("Сохранить")
                 }
             }
         }
 
-        // превью
-        Box(Modifier.weight(1f).fillMaxWidth().background(Color.Black)) {
-            val bmp = preview
-            if (bmp == null) {
-                Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                    LoadingIndicator(Modifier.size(48.dp))
-                }
-            } else {
-                var boxSize by remember { mutableStateOf(IntSize.Zero) }
-                Box(Modifier.fillMaxSize().onSizeChanged { boxSize = it }) {
-                    val disp = remember(bmp, boxSize) { fitRect(boxSize, bmp.width, bmp.height) }
-                    val density = LocalDensity.current
-                    Box(
-                        Modifier
-                            .offset { IntOffset(disp.left.roundToInt(), disp.top.roundToInt()) }
-                            .size(
-                                with(density) { disp.width.toDp() },
-                                with(density) { disp.height.toDp() },
-                            ),
-                    ) {
-                        Image(
-                            bitmap = bmp.asImageBitmap(),
-                            contentDescription = null,
-                            contentScale = ContentScale.Fit,
-                            colorFilter = colorFilter,
-                            modifier = Modifier.fillMaxSize(),
-                        )
-                        val c = crop
-                        if (mode == EditMode.CROP && c != null) {
-                            CropOverlay(
-                                rect = c,
-                                onChange = { crop = it },
-                            )
-                        }
-                    }
-                }
-            }
-        }
-
-        // инструменты
-        Column(Modifier.fillMaxWidth().padding(bottom = 8.dp)) {
-            Row(
-                Modifier.fillMaxWidth().padding(vertical = 4.dp),
-                horizontalArrangement = Arrangement.SpaceEvenly,
+        // ---- низ: плавающая тулбар-пилюля + пресеты кропа ----
+        Column(
+            Modifier
+                .align(Alignment.BottomCenter)
+                .fillMaxWidth()
+                .navigationBarsPadding()
+                .padding(bottom = 16.dp),
+            horizontalAlignment = Alignment.CenterHorizontally,
+        ) {
+            AnimatedVisibility(
+                visible = mode == EditMode.CROP,
+                enter = fadeIn(Motion.spatial()) + slideInVertically(Motion.spatial()) { it / 2 },
+                exit = fadeOut(Motion.effects()) + slideOutVertically(Motion.effects()) { it / 2 },
             ) {
-                ToolButton("Обрезать", Icons.Rounded.Crop, mode == EditMode.CROP) { mode = EditMode.CROP }
-                ToolButton("Повернуть", Icons.Rounded.RotateRight, false) {
-                    rotation = (rotation + 90) % 360
-                    crop = null
-                    aspectLabel = null
-                }
-                ToolButton("Отразить", Icons.Rounded.Flip, false) { flip = !flip }
-                ToolButton("Фильтры", Icons.Rounded.AutoFixHigh, mode == EditMode.FILTER) { mode = EditMode.FILTER }
-                ToolButton("Настройки", Icons.Rounded.Tune, mode == EditMode.ADJUST) { mode = EditMode.ADJUST }
-            }
-            val bmp = preview
-            when (mode) {
-                EditMode.CROP -> if (bmp != null) {
+                val bmp2 = preview
+                if (bmp2 != null) {
                     val options = remember {
                         listOf(
                             AspectOption("Свободно", null),
@@ -235,87 +276,215 @@ fun EditorScreen(item: MediaItem, onBack: () -> Unit, onSaved: () -> Unit) {
                             AspectOption("9:16", 9f / 16f),
                         )
                     }
-                    LazyRow(contentPadding = PaddingValues(horizontal = 16.dp)) {
+                    LazyRow(
+                        contentPadding = PaddingValues(horizontal = 20.dp),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    ) {
                         itemsIndexed(options, key = { _, o -> o.label }) { _, opt ->
                             FilterChip(
                                 selected = aspectLabel == opt.label,
                                 onClick = {
                                     aspectLabel = opt.label
-                                    crop = aspectCropRect(opt.ratio, bmp.width, bmp.height)
+                                    crop = aspectCropRect(opt.ratio, bmp2.width, bmp2.height)
                                 },
                                 label = { Text(opt.label) },
-                                modifier = Modifier.padding(end = 8.dp),
                             )
                         }
                     }
                 }
-                EditMode.FILTER -> {
-                    val presets = FilterPreset.entries
-                    LazyRow(contentPadding = PaddingValues(horizontal = 16.dp)) {
-                        itemsIndexed(presets, key = { _, p -> p.name }) { _, preset ->
-                            FilterChip(
-                                selected = filter == preset,
-                                onClick = { filter = preset },
-                                label = {
-                                    Row(verticalAlignment = Alignment.CenterVertically) {
-                                        if (bmp != null) {
-                                            val m = remember(preset) { filterMatrix(preset, 0f, 1f, 1f) }
-                                            Image(
-                                                bitmap = bmp.asImageBitmap(),
-                                                contentDescription = preset.label,
-                                                colorFilter = ColorFilter.colorMatrix(ColorMatrix(m)),
-                                                contentScale = ContentScale.Crop,
-                                                modifier = Modifier.size(28.dp).clip(CircleShape),
-                                            )
-                                            Spacer(Modifier.width(6.dp))
-                                        }
-                                        Text(preset.label)
-                                    }
-                                },
-                                modifier = Modifier.padding(end = 8.dp),
-                            )
-                        }
-                    }
+            }
+            Spacer(Modifier.height(10.dp))
+            Row(
+                Modifier
+                    .shadow(8.dp, RoundedCornerShape(999.dp))
+                    .clip(RoundedCornerShape(999.dp))
+                    .background(MaterialTheme.colorScheme.surfaceContainer.copy(alpha = 0.97f))
+                    .padding(8.dp),
+                horizontalArrangement = Arrangement.spacedBy(4.dp),
+            ) {
+                ToolIcon(Icons.Rounded.Crop, "Обрезать", active = mode == EditMode.CROP) {
+                    mode = if (mode == EditMode.CROP) EditMode.NONE else EditMode.CROP
                 }
-                EditMode.ADJUST -> Column(Modifier.padding(horizontal = 24.dp)) {
-                    AdjustSlider("Яркость", brightness, -0.5f, 0.5f) { brightness = it }
-                    AdjustSlider("Контраст", (contrast - 1f) * 2f, -1f, 1f) { contrast = 1f + it / 2f }
-                    AdjustSlider("Насыщенность", saturation - 1f, -1f, 1f) { saturation = 1f + it }
+                ToolIcon(Icons.Rounded.RotateRight, "Повернуть", active = false) {
+                    rotation = (rotation + 90) % 360
+                    crop = null
+                    aspectLabel = null
                 }
-                EditMode.NONE -> {}
+                ToolIcon(Icons.Rounded.Flip, "Отразить", active = false) { flip = !flip }
+                ToolIcon(Icons.Rounded.AutoFixHigh, "Фильтры", active = filter != FilterPreset.NONE) {
+                    showFilters = true
+                }
+                ToolIcon(Icons.Rounded.Tune, "Настройки", active = anyAdjust) {
+                    showAdjust = true
+                }
+            }
+        }
+
+        // ---- шторка фильтров ----
+        if (showFilters) {
+            ModalBottomSheet(onDismissRequest = { showFilters = false }) {
+                FiltersSheet(
+                    preview = preview,
+                    selected = filter,
+                    onPick = { filter = it },
+                )
+            }
+        }
+
+        // ---- шторка настроек ----
+        if (showAdjust) {
+            ModalBottomSheet(onDismissRequest = { showAdjust = false }) {
+                AdjustSheet(
+                    brightness = brightness,
+                    contrast = contrast,
+                    saturation = saturation,
+                    onBrightness = { brightness = it },
+                    onContrast = { contrast = it },
+                    onSaturation = { saturation = it },
+                    onReset = {
+                        brightness = 0f; contrast = 1f; saturation = 1f
+                    },
+                )
             }
         }
     }
 }
 
+// =====================================================================
+// Панели
+// =====================================================================
+
 @Composable
-private fun ToolButton(label: String, icon: ImageVector, active: Boolean, onClick: () -> Unit) {
+private fun ToolIcon(icon: ImageVector, label: String, active: Boolean, onClick: () -> Unit) {
     val scheme = MaterialTheme.colorScheme
+    val corner by androidx.compose.animation.core.animateDpAsState(
+        if (active) 16.dp else 999.dp, Motion.spatialFast(), label = "toolCorner",
+    )
     Column(
-        Modifier
-            .pillPress(onClick)
-            .clip(RoundedCornerShape(18.dp))
-            .background(if (active) scheme.secondaryContainer else Color.Transparent)
-            .padding(horizontal = 12.dp, vertical = 8.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
+        modifier = Modifier
+            .pillPress(onClick)
+            .clip(RoundedCornerShape(corner))
+            .background(if (active) scheme.primary else Color.Transparent)
+            .padding(horizontal = 14.dp, vertical = 8.dp),
     ) {
-        Icon(icon, label, tint = if (active) scheme.onSecondaryContainer else scheme.onSurfaceVariant)
+        Icon(
+            icon, label,
+            tint = if (active) scheme.onPrimary else scheme.onSurfaceVariant,
+            modifier = Modifier.size(24.dp),
+        )
         Text(
             label,
             style = MaterialTheme.typography.labelSmall,
-            color = if (active) scheme.onSecondaryContainer else scheme.onSurfaceVariant,
-            maxLines = 1,
+            color = if (active) scheme.onPrimary else scheme.onSurfaceVariant,
         )
     }
 }
 
 @Composable
-private fun AdjustSlider(label: String, value: Float, min: Float, max: Float, onChange: (Float) -> Unit) {
-    Column(Modifier.padding(vertical = 2.dp)) {
-        Text(label, style = MaterialTheme.typography.labelMedium)
-        Slider(value = value, onValueChange = onChange, valueRange = min..max)
+private fun FiltersSheet(preview: Bitmap?, selected: FilterPreset, onPick: (FilterPreset) -> Unit) {
+    Column(Modifier.fillMaxWidth().padding(horizontal = 24.dp)) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Text("Фильтры", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
+            Spacer(Modifier.weight(1f))
+            if (selected != FilterPreset.NONE) {
+                TextButton(onClick = { onPick(FilterPreset.NONE) }) { Text("Сбросить") }
+            }
+        }
+        LazyRow(
+            contentPadding = PaddingValues(vertical = 16.dp),
+            horizontalArrangement = Arrangement.spacedBy(12.dp),
+        ) {
+            itemsIndexed(FilterPreset.entries, key = { _, p -> p.name }) { _, preset ->
+                val active = selected == preset
+                val scale by animateFloatAsState(
+                    if (active) 1.05f else 1f, Motion.spatialFast(), label = "filterScale",
+                )
+                Column(
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    modifier = Modifier
+                        .pillPress { onPick(preset) }
+                        .graphicsLayer { scaleX = scale; scaleY = scale },
+                ) {
+                    Box(
+                        Modifier
+                            .size(width = 76.dp, height = 100.dp)
+                            .clip(RoundedCornerShape(18.dp))
+                            .background(MaterialTheme.colorScheme.surfaceVariant)
+                            .border(
+                                width = if (active) 3.dp else 2.dp,
+                                color = if (active) MaterialTheme.colorScheme.primary
+                                else MaterialTheme.colorScheme.outlineVariant,
+                                shape = RoundedCornerShape(18.dp),
+                            ),
+                    ) {
+                        if (preview != null) {
+                            val m = remember(preset) { filterMatrix(preset, 0f, 1f, 1f) }
+                            Image(
+                                bitmap = preview.asImageBitmap(),
+                                contentDescription = preset.label,
+                                colorFilter = ColorFilter.colorMatrix(ColorMatrix(m)),
+                                contentScale = ContentScale.Crop,
+                                modifier = Modifier.fillMaxSize(),
+                            )
+                        }
+                    }
+                    Text(
+                        preset.label,
+                        style = MaterialTheme.typography.labelMedium,
+                        color = if (active) MaterialTheme.colorScheme.primary
+                        else MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.padding(top = 8.dp),
+                    )
+                }
+            }
+        }
+        Spacer(Modifier.height(24.dp))
     }
 }
+
+@Composable
+private fun AdjustSheet(
+    brightness: Float,
+    contrast: Float,
+    saturation: Float,
+    onBrightness: (Float) -> Unit,
+    onContrast: (Float) -> Unit,
+    onSaturation: (Float) -> Unit,
+    onReset: () -> Unit,
+) {
+    Column(Modifier.fillMaxWidth().padding(horizontal = 24.dp)) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Text("Настройки", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
+            Spacer(Modifier.weight(1f))
+            TextButton(onClick = onReset) { Text("Сбросить") }
+        }
+        AdjustSlider("Яркость", brightness, -0.5f, 0.5f, onBrightness)
+        AdjustSlider("Контраст", (contrast - 1f) * 2f, -1f, 1f) { onContrast(1f + it / 2f) }
+        AdjustSlider("Насыщенность", saturation - 1f, -1f, 1f) { onSaturation(1f + it) }
+        Spacer(Modifier.height(24.dp))
+    }
+}
+
+@Composable
+private fun AdjustSlider(label: String, value: Float, min: Float, max: Float, onChange: (Float) -> Unit) {
+    Column(Modifier.padding(vertical = 6.dp)) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Text(label, style = MaterialTheme.typography.labelLarge)
+            Spacer(Modifier.weight(1f))
+            Text(
+                "${((value - min) / (max - min) * 100).roundToInt()}%",
+                style = MaterialTheme.typography.labelMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        }
+        Slider(value = value.coerceIn(min, max), onValueChange = onChange, valueRange = min..max)
+    }
+}
+
+// =====================================================================
+// Геометрия и кроп
+// =====================================================================
 
 /** Прямоугольник вписывания Fit: (left, top, width, height) в px. */
 private fun fitRect(container: IntSize, contentW: Int, contentH: Int): Rect {
@@ -346,7 +515,6 @@ private fun CropOverlay(rect: RectF, onChange: (RectF) -> Unit) {
     }
 
     Box(Modifier.fillMaxSize().onSizeChanged { sizePx = it }) {
-        // затемнение + сетка
         Canvas(
             Modifier
                 .fillMaxSize()

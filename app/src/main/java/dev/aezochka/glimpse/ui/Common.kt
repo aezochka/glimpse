@@ -10,16 +10,15 @@ import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
-import androidx.compose.foundation.background
+import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.PhotoLibrary
 import androidx.compose.material3.Button
@@ -33,15 +32,14 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.composed
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
-import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.style.TextAlign
-import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
+import dev.aezochka.glimpse.MediaItem
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
+import androidx.compose.foundation.shape.RoundedCornerShape
 
 /** Один словарь движений на всё приложение — M3E-спринги с овершутом. */
 object Motion {
@@ -55,8 +53,12 @@ object Motion {
         tween(190, easing = CubicBezierEasing(0.2f, 0f, 0f, 1f))
 }
 
+/** Уникальный ключ элемента: id фото и видео могут совпадать! */
+fun MediaItem.stableKey(): String = (if (isVideo) "v" else "i") + id
+
 /** Плитка: пружинный спад + морф угла — вместо стандартного ripple. */
-fun Modifier.cellPress(onClick: () -> Unit): Modifier = composed {
+@OptIn(ExperimentalFoundationApi::class)
+fun Modifier.cellPress(onClick: () -> Unit, onLongClick: (() -> Unit)? = null): Modifier = composed {
     val interaction = remember { MutableInteractionSource() }
     val pressed by interaction.collectIsPressedAsState()
     val scale by animateFloatAsState(
@@ -70,7 +72,12 @@ fun Modifier.cellPress(onClick: () -> Unit): Modifier = composed {
     this
         .graphicsLayer { scaleX = scale; scaleY = scale }
         .clip(RoundedCornerShape(corner))
-        .clickable(interactionSource = interaction, indication = null, onClick = onClick)
+        .combinedClickable(
+            interactionSource = interaction,
+            indication = null,
+            onClick = onClick,
+            onLongClick = onLongClick,
+        )
 }
 
 /** Пилюля/кнопка: пружинный спад без ripple. */
@@ -145,6 +152,17 @@ fun formatDay(sec: Long): String =
 
 fun formatDateTime(sec: Long): String =
     SimpleDateFormat("d MMMM yyyy, HH:mm", ruLocale).format(Date(sec * 1000L))
+
+/** «Сегодня» / «Вчера» / дата — живее, чем голая дата. */
+fun dayLabel(day: Long): String {
+    val today = System.currentTimeMillis() / 1000L / 86400L
+    return when (today - day) {
+        0L -> "Сегодня"
+        1L -> "Вчера"
+        2L -> "Позавчера"
+        else -> formatDay(day * 86400L)
+    }
+}
 
 fun dayKey(sec: Long): Long = sec / 86400L
 

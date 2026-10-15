@@ -74,9 +74,14 @@ fun ViewerScreen(
             beyondViewportPageCount = 1,
             modifier = Modifier.fillMaxSize(),
         ) { page ->
-            val item = items[page]
-            if (item.isVideo) VideoPage(item, onTap = { chrome = !chrome })
-            else ZoomPage(item, onTap = { chrome = !chrome })
+            val item = items.getOrNull(page)
+            if (item == null) {
+                Box(Modifier.fillMaxSize())
+            } else if (item.isVideo) {
+                VideoPage(item, onTap = { chrome = !chrome })
+            } else {
+                ZoomPage(item, onTap = { chrome = !chrome })
+            }
         }
 
         AnimatedVisibility(
