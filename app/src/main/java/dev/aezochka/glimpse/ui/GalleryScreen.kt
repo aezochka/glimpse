@@ -15,7 +15,7 @@ import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.animation.ExperimentalMaterial3ExpressiveApi
+import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
@@ -381,15 +381,24 @@ fun GalleryScreen(
                         pickConfig.onDone(sel)
                     },
                     onClear = { selected.clear() },
+                    modifier = Modifier.align(Alignment.BottomCenter),
                 )
                 selectionMode -> SelectBar(
                     count = selectedCount,
                     onShare = ::shareSelected,
                     onDelete = ::deleteSelected,
                     onClose = ::exitSelection,
+                    modifier = Modifier.align(Alignment.BottomCenter),
                 )
-                openAlbum != null -> BackAlbumBar { openAlbum = null }
-                else -> TabsBar(tab, onSelect = { tab = it })
+                openAlbum != null -> BackAlbumBar(
+                    onBack = { openAlbum = null },
+                    modifier = Modifier.align(Alignment.BottomStart),
+                )
+                else -> TabsBar(
+                    tab = tab,
+                    onSelect = { tab = it },
+                    modifier = Modifier.align(Alignment.BottomCenter),
+                )
             }
         }
     }
@@ -595,7 +604,7 @@ private fun AlbumsGrid(albums: List<Album>, onOpen: (Album) -> Unit) {
             Column(
                 Modifier
                     .padding(6.dp)
-                    .cellPress { onOpen(album) }
+                    .cellPress(onClick = { onOpen(album) })
                     .animateItem(),
             ) {
                 Box(
@@ -653,10 +662,9 @@ private fun AlbumsGrid(albums: List<Album>, onOpen: (Album) -> Unit) {
 
 /** Пилюля вкладок: парит над контентом, тень, пружины. */
 @Composable
-private fun TabsBar(tab: Int, onSelect: (Int) -> Unit) {
+private fun TabsBar(tab: Int, onSelect: (Int) -> Unit, modifier: Modifier = Modifier) {
     Row(
-        Modifier
-            .align(Alignment.BottomCenter)
+        modifier
             .padding(bottom = 18.dp)
             .shadow(8.dp, RoundedCornerShape(999.dp))
             .clip(RoundedCornerShape(999.dp))
@@ -706,10 +714,10 @@ private fun SelectBar(
     onShare: () -> Unit,
     onDelete: () -> Unit,
     onClose: () -> Unit,
+    modifier: Modifier = Modifier,
 ) {
     Row(
-        Modifier
-            .align(Alignment.BottomCenter)
+        modifier
             .fillMaxWidth()
             .shadow(12.dp)
             .background(MaterialTheme.colorScheme.surfaceContainer)
@@ -745,11 +753,16 @@ private fun SelectBar(
 }
 
 @Composable
-private fun PickBar(count: Int, allowMultiple: Boolean, onConfirm: () -> Unit, onClear: () -> Unit) {
+private fun PickBar(
+    count: Int,
+    allowMultiple: Boolean,
+    onConfirm: () -> Unit,
+    onClear: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
     if (!allowMultiple) {
         Row(
-            Modifier
-                .align(Alignment.BottomCenter)
+            modifier
                 .fillMaxWidth()
                 .background(MaterialTheme.colorScheme.surfaceContainer)
                 .navigationBarsPadding()
@@ -765,8 +778,7 @@ private fun PickBar(count: Int, allowMultiple: Boolean, onConfirm: () -> Unit, o
         return
     }
     Row(
-        Modifier
-            .align(Alignment.BottomCenter)
+        modifier
             .fillMaxWidth()
             .background(MaterialTheme.colorScheme.surfaceContainer)
             .navigationBarsPadding()
@@ -789,10 +801,9 @@ private fun PickBar(count: Int, allowMultiple: Boolean, onConfirm: () -> Unit, o
 }
 
 @Composable
-private fun BackAlbumBar(onBack: () -> Unit) {
+private fun BackAlbumBar(onBack: () -> Unit, modifier: Modifier = Modifier) {
     Row(
-        Modifier
-            .align(Alignment.BottomStart)
+        modifier
             .padding(start = 16.dp, bottom = 18.dp)
             .shadow(8.dp, RoundedCornerShape(999.dp))
             .clip(RoundedCornerShape(999.dp))
