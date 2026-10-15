@@ -8,7 +8,7 @@ plugins {
 
 android {
     namespace = "dev.aezochka.glimpse"
-    compileSdk = 36
+    compileSdk = 37
 
     defaultConfig {
         applicationId = "dev.aezochka.glimpse"
