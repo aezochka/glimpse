@@ -5,7 +5,9 @@ import androidx.activity.compose.BackHandler
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
+import androidx.compose.animation.core.LinearEasing
 import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.scaleIn
@@ -270,6 +272,7 @@ private fun VideoPage(item: MediaItem, onTap: () -> Unit, chrome: Boolean) {
     var isPlaying by remember { mutableStateOf(player.isPlaying) }
     var positionMs by remember { mutableStateOf(0L) }
     var durationMs by remember { mutableStateOf(0L) }
+    var scrubbing by remember { mutableStateOf(false) }
 
     DisposableEffect(player) {
         val listener = object : Player.Listener {
@@ -325,13 +328,23 @@ private fun VideoPage(item: MediaItem, onTap: () -> Unit, chrome: Boolean) {
                 val fraction = if (durationMs > 0) {
                     (positionMs.toFloat() / durationMs).coerceIn(0f, 1f)
                 } else 0f
+                // сглаживаем опрос 100мс → плавная полоса; при скрабе — честное значение
+                val smooth by animateFloatAsState(
+                    targetValue = fraction,
+                    animationSpec = tween(100, easing = LinearEasing),
+                    label = "vidPos",
+                )
                 Slider(
-                    value = fraction,
+                    value = if (scrubbing) fraction else smooth,
                     onValueChange = { f ->
                         if (durationMs > 0) {
+                            scrubbing = true
                             positionMs = (f * durationMs).toLong()
-                            player.seekTo(positionMs)
                         }
+                    },
+                    onValueChangeFinished = {
+                        scrubbing = false
+                        player.seekTo(positionMs)
                     },
                     colors = SliderDefaults.colors(
                         thumbColor = Color.White,

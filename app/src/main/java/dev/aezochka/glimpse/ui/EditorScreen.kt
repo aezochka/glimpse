@@ -187,7 +187,13 @@ fun EditorScreen(item: MediaItem, onBack: () -> Unit, onSaved: () -> Unit) {
             }
         } else {
             var boxSize by remember { mutableStateOf(IntSize.Zero) }
-            Box(Modifier.fillMaxSize().onSizeChanged { boxSize = it }) {
+            // в режиме кропа фото выше тулбара — нижние ручки доступны
+            Box(
+                Modifier
+                    .fillMaxSize()
+                    .padding(bottom = if (mode == EditMode.CROP) 108.dp else 0.dp)
+                    .onSizeChanged { boxSize = it }
+            ) {
                 val disp = remember(bmp, boxSize) { fitRect(boxSize, bmp.width, bmp.height) }
                 val density = LocalDensity.current
                 Box(

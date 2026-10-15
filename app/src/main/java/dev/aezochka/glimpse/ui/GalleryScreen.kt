@@ -172,7 +172,6 @@ fun GalleryScreen(
 ) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
-    var tab by rememberSaveable { mutableIntStateOf(0) }
     var openAlbum by rememberSaveable { mutableStateOf<String?>(null) }
     val pickMode = pickConfig != null
 
@@ -194,6 +193,10 @@ fun GalleryScreen(
     fun toggle(item: MediaItem) {
         val k = item.stableKey()
         if (selected[k] == true) selected.remove(k) else selected[k] = true
+        // 0 выделений — выходим из режима выбора сами
+        if (pickConfig == null && selectionMode && selected.isEmpty()) {
+            selectionMode = false
+        }
     }
 
     // ---- камера (Android 10+) ----
@@ -293,18 +296,28 @@ fun GalleryScreen(
     val cookieShape = MaterialShapes.Cookie9Sided.toShape()
     val pillShape = MaterialShapes.Pill.toShape()
 
+    // общий grid-state: скролл НЕ сбрасывается при входе/выходе из выбора
+    val gridState = androidx.compose.foundation.lazy.grid.rememberLazyGridState()
+    // вкладки листаются свайпом
+    val tabPager = androidx.compose.foundation.pager.rememberPagerState(pageCount = { 2 })
+
+    val blobAlpha by animateFloatAsState(
+        targetValue = if (gridState.firstVisibleItemIndex > 0) 0f else 1f,
+        animationSpec = Motion.effects(), label = "blobAlpha",
+    )
+
     Scaffold(containerColor = MaterialTheme.colorScheme.background) { pad ->
         Box(Modifier.fillMaxSize().padding(pad)) {
             Column(Modifier.fillMaxSize()) {
                 // ---- шапка с M3E-блобом ----
                 Box(Modifier.fillMaxWidth()) {
-                    // декоративная цветочная форма, уходящая за край
+                    // цветочная форма: при скролле плавно тает, чтобы не мешала
                     Box(
                         Modifier
                             .align(Alignment.TopStart)
-                            .offset(x = (-34).dp, y = (-56).dp)
-                            .size(170.dp)
-                            .graphicsLayer { rotationZ = 24f }
+                            .offset(x = (-24).dp, y = (-44).dp)
+                            .size(150.dp)
+                            .graphicsLayer { rotationZ = 24f; alpha = blobAlpha }
                             .clip(flowerShape)
                             .background(MaterialTheme.colorScheme.primaryContainer),
                     )
@@ -348,37 +361,44 @@ fun GalleryScreen(
                     }
                 }
 
-                // ---- контент с анимацией переключения ----
-                val viewKey = when {
-                    selectionMode -> 3
-                    openAlbum != null -> 2
-                    tab == 1 && !pickMode -> 1
-                    else -> 0
-                }
-                AnimatedContent(
-                    targetState = viewKey,
-                    label = "views",
-                    transitionSpec = {
-                        (fadeIn(Motion.spatial()) + scaleIn(Motion.spatial(), initialScale = 0.96f)) togetherWith
-                            (fadeOut(Motion.effects()) + scaleOut(Motion.effects(), targetScale = 0.96f))
-                    },
-                ) { v ->
-                    Box(Modifier.fillMaxSize()) {
-                        when {
-                            media.isEmpty() -> EmptyState("Пока пусто")
-                            v == 1 -> AlbumsGrid(albums) { openAlbum = it.name }
-                            else -> PhotosGrid(
-                                items = items,
-                                pickConfig = pickConfig,
-                                selectionMode = selectionMode,
-                                selected = selected,
-                                onToggle = ::toggle,
-                                onOpen = onOpen,
-                                onEnterSelection = { item ->
-                                    selectionMode = true
-                                    selected[item.stableKey()] = true
-                                },
-                            )
+                // ---- контент: вкладки листаются свайпом (пейджер) ----
+                Box(Modifier.weight(1f)) {
+                    when {
+                        media.isEmpty() -> EmptyState("Пока пусто")
+                        openAlbum != null || pickMode || selectionMode -> PhotosGrid(
+                            items = items,
+                            pickConfig = pickConfig,
+                            selectionMode = selectionMode,
+                            selected = selected,
+                            gridState = gridState,
+                            onToggle = ::toggle,
+                            onOpen = onOpen,
+                            onEnterSelection = { item ->
+                                selectionMode = true
+                                selected[item.stableKey()] = true
+                            },
+                        )
+                        else -> androidx.compose.foundation.pager.HorizontalPager(
+                            state = tabPager,
+                            modifier = Modifier.fillMaxSize(),
+                        ) { page ->
+                            if (page == 0) {
+                                PhotosGrid(
+                                    items = items,
+                                    pickConfig = null,
+                                    selectionMode = false,
+                                    selected = selected,
+                                    gridState = gridState,
+                                    onToggle = ::toggle,
+                                    onOpen = onOpen,
+                                    onEnterSelection = { item ->
+                                        selectionMode = true
+                                        selected[item.stableKey()] = true
+                                    },
+                                )
+                            } else {
+                                AlbumsGrid(albums) { openAlbum = it.name }
+                            }
                         }
                     }
                 }
@@ -401,6 +421,7 @@ fun GalleryScreen(
                     onShare = ::shareSelected,
                     onDelete = ::deleteSelected,
                     onClose = ::exitSelection,
+                    cookieShape = cookieShape,
                     modifier = Modifier.align(Alignment.BottomCenter),
                 )
                 openAlbum != null -> BackAlbumBar(
@@ -408,8 +429,8 @@ fun GalleryScreen(
                     modifier = Modifier.align(Alignment.BottomStart),
                 )
                 else -> TabsBar(
-                    tab = tab,
-                    onSelect = { tab = it },
+                    tab = tabPager.settledPage,
+                    onSelect = { t -> scope.launch { tabPager.animateScrollToPage(t) } },
                     modifier = Modifier.align(Alignment.BottomCenter),
                 )
             }
@@ -427,6 +448,7 @@ private fun PhotosGrid(
     pickConfig: PickConfig?,
     selectionMode: Boolean,
     selected: SnapshotStateMap<String, Boolean>,
+    gridState: androidx.compose.foundation.lazy.grid.LazyGridState,
     onToggle: (MediaItem) -> Unit,
     onOpen: ((List<MediaItem>, Int) -> Unit)?,
     onEnterSelection: (MediaItem) -> Unit,
@@ -435,6 +457,7 @@ private fun PhotosGrid(
         items.groupBy { dayKey(it.date) }
     }
     LazyVerticalGrid(
+        state = gridState,
         columns = GridCells.Adaptive(100.dp),
         contentPadding = PaddingValues(start = 1.5.dp, end = 1.5.dp, top = 1.5.dp, bottom = 112.dp),
         modifier = Modifier.fillMaxSize(),
@@ -492,6 +515,7 @@ private fun DayHeader(label: String, count: Int) {
     }
 }
 
+@OptIn(ExperimentalMaterial3ExpressiveApi::class)
 @Composable
 fun PhotoCell(
     item: MediaItem,
@@ -502,6 +526,7 @@ fun PhotoCell(
     modifier: Modifier = Modifier,
 ) {
     val context = LocalContext.current
+    val checkShape = MaterialShapes.Cookie9Sided.toShape()
     Box(modifier.aspectRatio(1f).cellPress(onClick, onLongClick)) {
         if (item.isVideo) {
             val thumb by rememberVideoThumb(item)
@@ -565,12 +590,12 @@ fun PhotoCell(
             }
             Box(
                 Modifier.align(Alignment.TopEnd)
-                    .padding(7.dp)
-                    .size(26.dp)
+                    .padding(6.dp)
+                    .size(30.dp)
+                    .clip(checkShape)
                     .background(
                         if (selected) MaterialTheme.colorScheme.primary
                         else Color.Black.copy(alpha = 0.35f),
-                        CircleShape,
                     ),
                 contentAlignment = Alignment.Center,
             ) {
@@ -720,27 +745,40 @@ fun TabPill(active: Boolean, icon: ImageVector, label: String, onClick: () -> Un
     }
 }
 
-/** Бар мультивыбора: анимированный счётчик, поделиться, удалить. */
+/** Панель выбора: плавающая M3E-пилюля с cookie-счётчиком. */
 @Composable
 private fun SelectBar(
     count: Int,
     onShare: () -> Unit,
     onDelete: () -> Unit,
     onClose: () -> Unit,
+    cookieShape: androidx.compose.ui.graphics.Shape,
     modifier: Modifier = Modifier,
 ) {
+    val scheme = MaterialTheme.colorScheme
     Row(
         modifier
-            .fillMaxWidth()
-            .shadow(12.dp)
-            .background(MaterialTheme.colorScheme.surfaceContainer)
+            .padding(horizontal = 16.dp, vertical = 8.dp)
             .navigationBarsPadding()
-            .padding(horizontal = 12.dp, vertical = 8.dp),
+            .shadow(8.dp, RoundedCornerShape(999.dp))
+            .clip(RoundedCornerShape(999.dp))
+            .background(scheme.surfaceContainer)
+            .padding(8.dp),
         verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(6.dp),
     ) {
-        IconButton(onClick = onClose) {
-            Icon(Icons.Rounded.Close, "Выйти из выбора")
+        // закрыть
+        Box(
+            Modifier
+                .pillPress(onClose)
+                .size(44.dp)
+                .clip(CircleShape)
+                .background(scheme.surfaceContainerHigh),
+            contentAlignment = Alignment.Center,
+        ) {
+            Icon(Icons.Rounded.Close, "Выйти из выбора", tint = scheme.onSurfaceVariant)
         }
+        // счётчик в cookie-форме
         AnimatedContent(
             targetState = count,
             label = "selCount",
@@ -749,18 +787,49 @@ private fun SelectBar(
                     (scaleOut(Motion.effects()) + fadeOut(Motion.effects()))
             },
         ) { n ->
-            Text(
-                if (n == 0) "Ничего не выбрано" else "$n",
-                style = MaterialTheme.typography.titleLarge,
-                fontWeight = FontWeight.Bold,
-            )
+            Box(
+                Modifier
+                    .clip(cookieShape)
+                    .background(if (n > 0) scheme.primaryContainer else scheme.surfaceContainerHigh)
+                    .padding(horizontal = 14.dp, vertical = 10.dp),
+                contentAlignment = Alignment.Center,
+            ) {
+                Text(
+                    "$n",
+                    style = MaterialTheme.typography.labelLarge,
+                    fontWeight = FontWeight.Bold,
+                    color = if (n > 0) scheme.onPrimaryContainer else scheme.onSurfaceVariant,
+                )
+            }
         }
         Spacer(Modifier.weight(1f))
-        IconButton(onClick = onShare, enabled = count > 0) {
-            Icon(Icons.Rounded.Share, "Поделиться")
+        // поделиться
+        Box(
+            Modifier
+                .pillPress(onShare)
+                .size(44.dp)
+                .clip(CircleShape)
+                .background(scheme.surfaceContainerHigh),
+            contentAlignment = Alignment.Center,
+        ) {
+            Icon(
+                Icons.Rounded.Share, "Поделиться",
+                tint = if (count > 0) scheme.primary else scheme.onSurfaceVariant,
+            )
         }
-        IconButton(onClick = onDelete, enabled = count > 0) {
-            Icon(Icons.Rounded.Delete, "Удалить", tint = MaterialTheme.colorScheme.error)
+        // удалить
+        Box(
+            Modifier
+                .pillPress(onDelete)
+                .size(44.dp)
+                .clip(CircleShape)
+                .background(scheme.errorContainer),
+            contentAlignment = Alignment.Center,
+        ) {
+            Icon(
+                Icons.Rounded.Delete, "Удалить",
+                tint = if (count > 0) scheme.error else scheme.onSurfaceVariant,
+            )
         }
     }
 }
