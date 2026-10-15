@@ -54,7 +54,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
-import androidx.compose.runtime.snapshot.SnapshotStateMap
+import androidx.compose.runtime.snapshots.SnapshotStateMap
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -72,7 +72,7 @@ import dev.aezochka.glimpse.GalleryViewModel
 import dev.aezochka.glimpse.MediaItem
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
-import java.util.Size
+import android.util.Size
 
 /** Конфиг режима «выбрать файлы для другого приложения». */
 data class PickConfig(

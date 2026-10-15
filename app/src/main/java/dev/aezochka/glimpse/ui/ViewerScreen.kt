@@ -46,7 +46,6 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.compose.foundation.Image
-import androidx.media3.common.MediaItem
 import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.ui.AspectRatioFrameLayout
 import androidx.media3.ui.PlayerView
@@ -220,7 +219,7 @@ private fun VideoPage(item: MediaItem, onTap: () -> Unit) {
     val context = LocalContext.current
     val player = remember {
         ExoPlayer.Builder(context).build().apply {
-            setMediaItem(MediaItem.fromUri(item.uri))
+            setMediaItem(androidx.media3.common.MediaItem.fromUri(item.uri))
             prepare()
             playWhenReady = true
         }

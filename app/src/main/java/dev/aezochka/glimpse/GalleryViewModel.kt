@@ -3,7 +3,8 @@ package dev.aezochka.glimpse
 import android.app.Application
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
-import androidx.lifecycle.viewmodel.compose.viewModelFactory
+import androidx.lifecycle.viewmodel.initializer
+import androidx.lifecycle.viewmodel.viewModelFactory
 import kotlinx.coroutines.flow.StateFlow
 
 class GalleryViewModel(application: Application) : ViewModel() {
