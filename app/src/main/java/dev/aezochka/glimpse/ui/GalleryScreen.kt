@@ -39,6 +39,7 @@ import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.navigationBarsPadding
+import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
@@ -162,7 +163,7 @@ fun GalleryRoot(vm: GalleryViewModel = viewModel(factory = GalleryViewModel.Fact
     }
 }
 
-@OptIn(ExperimentalMaterial3Api::class, ExperimentalFoundationApi::class)
+@OptIn(ExperimentalMaterial3Api::class, ExperimentalFoundationApi::class, ExperimentalMaterial3ExpressiveApi::class)
 @Composable
 fun GalleryScreen(
     media: List<MediaItem>,
@@ -288,50 +289,62 @@ fun GalleryScreen(
 
     BackHandler(enabled = selectionMode) { exitSelection() }
 
+    val flowerShape = MaterialShapes.Flower.toShape()
+    val cookieShape = MaterialShapes.Cookie9Sided.toShape()
+    val pillShape = MaterialShapes.Pill.toShape()
+
     Scaffold(containerColor = MaterialTheme.colorScheme.background) { pad ->
         Box(Modifier.fillMaxSize().padding(pad)) {
             Column(Modifier.fillMaxSize()) {
-                // ---- шапка ----
-                Row(
-                    Modifier.padding(start = 20.dp, end = 20.dp, top = 10.dp, bottom = 4.dp),
-                    verticalAlignment = Alignment.CenterVertically,
-                ) {
-                    Column(Modifier.weight(1f)) {
-                        Text(
-                            openAlbum ?: if (pickMode) "Glimpse" else "Галерея",
-                            style = MaterialTheme.typography.headlineLarge,
-                            fontWeight = FontWeight.Bold,
-                            maxLines = 1,
-                            overflow = TextOverflow.Ellipsis,
-                        )
-                        if (!selectionMode) {
-                            AnimatedContent(
-                                targetState = run {
-                                    val imgC = items.count { !it.isVideo }
-                                    val vidC = items.count { it.isVideo }
-                                    if (pickMode) "Выберите файлы" else "$imgC фото · $vidC видео"
-                                },
-                                label = "counts",
-                                transitionSpec = {
-                                    (fadeIn(Motion.spatial()) + scaleIn(Motion.spatial(), initialScale = 0.9f)) togetherWith fadeOut(Motion.effects())
-                                },
-                            ) { txt ->
-                                Text(
-                                    txt,
-                                    style = MaterialTheme.typography.labelLarge,
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                )
-                            }
-                        } else {
+                // ---- шапка с M3E-блобом ----
+                Box(Modifier.fillMaxWidth()) {
+                    // декоративная цветочная форма, уходящая за край
+                    Box(
+                        Modifier
+                            .align(Alignment.TopStart)
+                            .offset(x = (-34).dp, y = (-56).dp)
+                            .size(170.dp)
+                            .graphicsLayer { rotationZ = 24f }
+                            .clip(flowerShape)
+                            .background(MaterialTheme.colorScheme.primaryContainer),
+                    )
+                    Row(
+                        Modifier
+                            .fillMaxWidth()
+                            .padding(start = 20.dp, end = 20.dp, top = 10.dp, bottom = 6.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        Column(Modifier.weight(1f)) {
                             Text(
-                                "Режим выбора",
-                                style = MaterialTheme.typography.labelLarge,
-                                color = MaterialTheme.colorScheme.primary,
+                                openAlbum ?: if (pickMode) "Glimpse" else "Галерея",
+                                style = MaterialTheme.typography.headlineLarge,
+                                fontWeight = FontWeight.ExtraBold,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis,
                             )
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                                modifier = Modifier.padding(top = 6.dp),
+                            ) {
+                                when {
+                                    selectionMode -> StatChip(
+                                        shape = pillShape,
+                                        value = "$selectedCount",
+                                        label = "выбрано",
+                                        highlight = true,
+                                    )
+                                    pickMode -> StatChip(pillShape, "…", "Выберите файлы", false)
+                                    else -> {
+                                        StatChip(cookieShape, "${items.count { !it.isVideo }}", "фото", false)
+                                        StatChip(pillShape, "${items.count { it.isVideo }}", "видео", false)
+                                    }
+                                }
+                            }
                         }
-                    }
-                    if (openAlbum == null && !pickMode && !selectionMode) {
-                        CameraButton(onClick = ::takePhoto)
+                        if (openAlbum == null && !pickMode && !selectionMode) {
+                            CameraButton(onClick = ::takePhoto)
+                        }
                     }
                 }
 
@@ -811,6 +824,44 @@ private fun BackAlbumBar(onBack: () -> Unit, modifier: Modifier = Modifier) {
             .padding(8.dp),
     ) {
         TabPill(active = true, icon = Icons.AutoMirrored.Rounded.ArrowBack, label = "Все фото", onClick = onBack)
+    }
+}
+
+// =====================================================================
+// Шапка: чипы-счётчики в материальных формах
+// =====================================================================
+
+@Composable
+private fun StatChip(
+    shape: androidx.compose.ui.graphics.Shape,
+    value: String,
+    label: String,
+    highlight: Boolean,
+) {
+    val scheme = MaterialTheme.colorScheme
+    Row(
+        Modifier
+            .clip(shape)
+            .background(
+                if (highlight) scheme.primaryContainer
+                else MaterialTheme.colorScheme.surfaceContainerHigh
+            )
+            .padding(horizontal = 14.dp, vertical = 7.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Text(
+            value,
+            style = MaterialTheme.typography.labelLarge,
+            fontWeight = FontWeight.Bold,
+            color = if (highlight) scheme.onPrimaryContainer else scheme.primary,
+        )
+        Spacer(Modifier.width(4.dp))
+        Text(
+            label,
+            style = MaterialTheme.typography.labelMedium,
+            color = if (highlight) scheme.onPrimaryContainer
+            else MaterialTheme.colorScheme.onSurfaceVariant,
+        )
     }
 }
 

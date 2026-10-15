@@ -51,7 +51,9 @@ import androidx.compose.material3.FilterChip
 import androidx.compose.material3.Icon
 import androidx.compose.material3.LoadingIndicator
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.MaterialShapes
 import androidx.compose.material3.ModalBottomSheet
+import androidx.compose.material3.toShape
 import androidx.compose.material3.Slider
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
@@ -127,12 +129,23 @@ fun EditorScreen(item: MediaItem, onBack: () -> Unit, onSaved: () -> Unit) {
     var showFilters by remember { mutableStateOf(false) }
     var showAdjust by remember { mutableStateOf(false) }
 
-    // превью с запечённым поворотом/зеркалом
+    // базовый битмап декодируем один раз; поворот/зеркало — мгновенно из кэша
+    var baseBitmap by remember { mutableStateOf<Bitmap?>(null) }
     var preview by remember { mutableStateOf<Bitmap?>(null) }
-    LaunchedEffect(item.uri, rotation, flip) {
-        preview = withContext(Dispatchers.IO) {
-            val base = decodeBitmap(context.contentResolver, item.uri, 1600)
-            base?.let { transformBitmap(it, rotation, flip) }
+    LaunchedEffect(item.uri) {
+        baseBitmap = withContext(Dispatchers.IO) {
+            decodeBitmap(context.contentResolver, item.uri, 1600)
+        }
+    }
+    LaunchedEffect(baseBitmap, rotation, flip) {
+        preview = baseBitmap?.let { b ->
+            withContext(Dispatchers.Default) { transformBitmap(b, rotation, flip) }
+        }
+    }
+
+    LaunchedEffect(mode, preview) {
+        if (mode == EditMode.CROP && crop == null) {
+            preview?.let { b -> crop = aspectCropRect(null, b.width, b.height) }
         }
     }
 
@@ -303,7 +316,14 @@ fun EditorScreen(item: MediaItem, onBack: () -> Unit, onSaved: () -> Unit) {
                 horizontalArrangement = Arrangement.spacedBy(4.dp),
             ) {
                 ToolIcon(Icons.Rounded.Crop, "Обрезать", active = mode == EditMode.CROP) {
-                    mode = if (mode == EditMode.CROP) EditMode.NONE else EditMode.CROP
+                    if (mode == EditMode.CROP) {
+                        // выход из кропа: что видно на превью, то и сохранится
+                        mode = EditMode.NONE
+                        crop = null
+                        aspectLabel = null
+                    } else {
+                        mode = EditMode.CROP
+                    }
                 }
                 ToolIcon(Icons.Rounded.RotateRight, "Повернуть", active = false) {
                     rotation = (rotation + 90) % 360
@@ -354,17 +374,16 @@ fun EditorScreen(item: MediaItem, onBack: () -> Unit, onSaved: () -> Unit) {
 // Панели
 // =====================================================================
 
+@OptIn(ExperimentalMaterial3ExpressiveApi::class)
 @Composable
 private fun ToolIcon(icon: ImageVector, label: String, active: Boolean, onClick: () -> Unit) {
     val scheme = MaterialTheme.colorScheme
-    val corner by androidx.compose.animation.core.animateDpAsState(
-        if (active) 16.dp else 999.dp, Motion.spatialFast(), label = "toolCorner",
-    )
+    val shape = if (active) MaterialShapes.Cookie12Sided.toShape() else RoundedCornerShape(999.dp)
     Column(
         horizontalAlignment = Alignment.CenterHorizontally,
         modifier = Modifier
             .pillPress(onClick)
-            .clip(RoundedCornerShape(corner))
+            .clip(shape)
             .background(if (active) scheme.primary else Color.Transparent)
             .padding(horizontal = 14.dp, vertical = 8.dp),
     ) {
