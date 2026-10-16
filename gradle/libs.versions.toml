@@ -9,7 +9,7 @@ activityCompose = "1.11.0"
 coroutines = "1.10.2"
 coil = "2.7.0"
 media3 = "1.11.1"
-m3eCompose = "0.1.0"
+m3eCompose = "0.2.0"
 
 [libraries]
 kotlinx-coroutines-android = { group = "org.jetbrains.kotlinx", name = "kotlinx-coroutines-android", version.ref = "coroutines" }
