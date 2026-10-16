@@ -2,19 +2,7 @@ package dev.aezochka.glimpse.ui
 
 import android.Manifest
 import android.os.Build
-import androidx.compose.animation.animateColorAsState
-import androidx.compose.animation.core.CubicBezierEasing
 import androidx.compose.animation.core.FiniteAnimationSpec
-import androidx.compose.animation.core.Spring
-import androidx.compose.animation.core.animateDpAsState
-import androidx.compose.animation.core.animateFloatAsState
-import androidx.compose.animation.core.spring
-import androidx.compose.animation.core.tween
-import androidx.compose.foundation.ExperimentalFoundationApi
-import androidx.compose.foundation.clickable
-import androidx.compose.foundation.combinedClickable
-import androidx.compose.foundation.interaction.MutableInteractionSource
-import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -26,72 +14,37 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.composed
-import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import dev.aezochka.glimpse.MediaItem
+import dev.aezochka.m3e.M3EMotion
+import dev.aezochka.m3e.m3ePillPress
+import dev.aezochka.m3e.m3ePress
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
-import androidx.compose.foundation.shape.RoundedCornerShape
 
-/** Один словарь движений на всё приложение — M3E-спринги с овершутом. */
+/** Один словарь движений на всё приложение — делегат в общий M3E-порт (m3e-compose). */
 object Motion {
-    fun <T> spatial(): FiniteAnimationSpec<T> =
-        spring(dampingRatio = 0.62f, stiffness = Spring.StiffnessMediumLow)
+    fun <T> spatial(): FiniteAnimationSpec<T> = M3EMotion.spatial()
 
-    fun <T> spatialFast(): FiniteAnimationSpec<T> =
-        spring(dampingRatio = 0.55f, stiffness = Spring.StiffnessMedium)
+    fun <T> spatialFast(): FiniteAnimationSpec<T> = M3EMotion.spatialFast()
 
-    fun <T> effects(): FiniteAnimationSpec<T> =
-        tween(190, easing = CubicBezierEasing(0.2f, 0f, 0f, 1f))
+    fun <T> effects(): FiniteAnimationSpec<T> = M3EMotion.effects()
 }
 
 /** Уникальный ключ элемента: id фото и видео могут совпадать! */
 fun MediaItem.stableKey(): String = (if (isVideo) "v" else "i") + id
 
-/** Плитка: пружинный спад + морф угла — вместо стандартного ripple. */
-@OptIn(ExperimentalFoundationApi::class)
-fun Modifier.cellPress(onClick: () -> Unit, onLongClick: (() -> Unit)? = null): Modifier = composed {
-    val interaction = remember { MutableInteractionSource() }
-    val pressed by interaction.collectIsPressedAsState()
-    val scale by animateFloatAsState(
-        targetValue = if (pressed) 0.94f else 1f,
-        animationSpec = Motion.spatialFast(), label = "cellScale",
-    )
-    val corner by animateDpAsState(
-        targetValue = if (pressed) 26.dp else 10.dp,
-        animationSpec = Motion.spatialFast(), label = "cellCorner",
-    )
-    this
-        .graphicsLayer { scaleX = scale; scaleY = scale }
-        .clip(RoundedCornerShape(corner))
-        .combinedClickable(
-            interactionSource = interaction,
-            indication = null,
-            onClick = onClick,
-            onLongClick = onLongClick,
-        )
-}
+/** Плитка: пружинный спад + морф угла — из m3e-compose. */
+fun Modifier.cellPress(onClick: () -> Unit, onLongClick: (() -> Unit)? = null): Modifier =
+    m3ePress(onClick = onClick, onLongClick = onLongClick)
 
-/** Пилюля/кнопка: пружинный спад без ripple. */
-fun Modifier.pillPress(onClick: () -> Unit): Modifier = composed {
-    val interaction = remember { MutableInteractionSource() }
-    val pressed by interaction.collectIsPressedAsState()
-    val scale by animateFloatAsState(
-        targetValue = if (pressed) 0.95f else 1f,
-        animationSpec = Motion.spatialFast(), label = "pillScale",
-    )
-    this
-        .graphicsLayer { scaleX = scale; scaleY = scale }
-        .clickable(interactionSource = interaction, indication = null, onClick = onClick)
-}
+/** Пилюля/кнопка: пружинный спад — из m3e-compose. */
+fun Modifier.pillPress(onClick: () -> Unit): Modifier =
+    m3ePillPress(onClick = onClick)
 
 @Composable
 fun PermissionScreen(onRequest: () -> Unit) {

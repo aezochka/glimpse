@@ -2,9 +2,6 @@ package dev.aezochka.glimpse.ui.theme
 
 import android.os.Build
 import androidx.compose.foundation.isSystemInDarkTheme
-import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
-import androidx.compose.material3.MaterialExpressiveTheme
-import androidx.compose.material3.MotionScheme
 import androidx.compose.material3.darkColorScheme
 import androidx.compose.material3.dynamicDarkColorScheme
 import androidx.compose.material3.dynamicLightColorScheme
@@ -12,6 +9,7 @@ import androidx.compose.material3.lightColorScheme
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
+import dev.aezochka.m3e.M3ETheme
 
 private val LightColors = lightColorScheme(
     primary = Color(0xFF6750E3),
@@ -57,7 +55,6 @@ private val DarkColors = darkColorScheme(
     outline = Color(0xFF938F99),
 )
 
-@OptIn(ExperimentalMaterial3ExpressiveApi::class)
 @Composable
 fun GlimpseTheme(
     darkTheme: Boolean = isSystemInDarkTheme(),
@@ -70,9 +67,9 @@ fun GlimpseTheme(
         darkTheme -> DarkColors
         else -> LightColors
     }
-    MaterialExpressiveTheme(
+    M3ETheme(
         colorScheme = colorScheme,
-        motionScheme = MotionScheme.expressive(),
+        dynamicColor = false,
         content = content,
     )
 }
