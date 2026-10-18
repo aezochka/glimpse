@@ -68,9 +68,6 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialShapes
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
-import androidx.compose.material3.SegmentedButton
-import androidx.compose.material3.SegmentedButtonDefaults
-import androidx.compose.material3.SingleChoiceSegmentedButtonRow
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.toShape
@@ -103,6 +100,7 @@ import coil.compose.AsyncImage
 import coil.request.ImageRequest
 import dev.aezochka.glimpse.GalleryViewModel
 import dev.aezochka.glimpse.MediaItem
+import dev.aezochka.m3e.M3ESegmentedButtonRow
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -396,20 +394,15 @@ fun GalleryScreen(
 
                 // ---- фильтр типа медиа — настоящий M3E segmented button ----
                 if (openAlbum == null && !pickMode && !selectionMode) {
-                    SingleChoiceSegmentedButtonRow(
+                    M3ESegmentedButtonRow(
+                        labels = listOf("Все", "Фото", "Видео"),
+                        selectedIndex = mediaFilter,
+                        onSelect = { index ->
+                            mediaFilter = index
+                            scope.launch { gridState.scrollToItem(0) }
+                        },
                         modifier = Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 8.dp),
-                    ) {
-                        listOf("Все", "Фото", "Видео").forEachIndexed { index, label ->
-                            SegmentedButton(
-                                selected = mediaFilter == index,
-                                onClick = {
-                                    mediaFilter = index
-                                    scope.launch { gridState.scrollToItem(0) }
-                                },
-                                shape = SegmentedButtonDefaults.itemShape(index = index, count = 3),
-                            ) { Text(label) }
-                        }
-                    }
+                    )
                 }
 
                 // ---- контент: вкладки листаются свайпом (пейджер) ----
