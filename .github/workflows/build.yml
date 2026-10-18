@@ -30,6 +30,9 @@ jobs:
       - name: Install Android platform 37
         run: yes | sdkmanager "platforms;android-37" > /dev/null || true
 
+      - name: Unit tests
+        run: ./gradlew :app:testDebugUnitTest --no-daemon --stacktrace
+
       - name: Build debug APK
         run: ./gradlew :app:assembleDebug --no-daemon --stacktrace
 
