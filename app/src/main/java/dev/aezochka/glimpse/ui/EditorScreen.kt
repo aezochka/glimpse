@@ -101,6 +101,7 @@ import dev.aezochka.glimpse.editor.decodeBitmap
 import dev.aezochka.glimpse.editor.filterMatrix
 import dev.aezochka.glimpse.editor.saveBitmap
 import dev.aezochka.glimpse.editor.transformBitmap
+import dev.aezochka.m3e.M3EHorizontalFloatingToolbar
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -313,17 +314,12 @@ fun EditorScreen(item: MediaItem, onBack: () -> Unit, onSaved: () -> Unit) {
                 }
             }
             Spacer(Modifier.height(10.dp))
-            Row(
-                Modifier
-                    .shadow(8.dp, RoundedCornerShape(999.dp))
-                    .clip(RoundedCornerShape(999.dp))
-                    .background(MaterialTheme.colorScheme.surfaceContainer.copy(alpha = 0.97f))
-                    .padding(8.dp),
-                horizontalArrangement = Arrangement.spacedBy(4.dp),
+            M3EHorizontalFloatingToolbar(
+                expanded = true,
+                modifier = Modifier.shadow(8.dp, RoundedCornerShape(999.dp)),
             ) {
                 ToolIcon(Icons.Rounded.Crop, "Обрезать", active = mode == EditMode.CROP) {
                     if (mode == EditMode.CROP) {
-                        // выход из кропа: что видно на превью, то и сохранится
                         mode = EditMode.NONE
                         crop = null
                         aspectLabel = null
@@ -627,7 +623,12 @@ private fun CornerHandle(
 ) {
     Box(
         Modifier
-            .offset { IntOffset(posX().roundToInt() - 24, posY().roundToInt() - 24) }
+            .offset {
+                IntOffset(
+                    posX().roundToInt() - with(density) { 24.dp.roundToPx() },
+                    posY().roundToInt() - with(density) { 24.dp.roundToPx() },
+                )
+            }
             .size(48.dp)
             .pointerInput(corner) {
                 detectDragGestures { change, drag ->

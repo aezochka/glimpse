@@ -11,7 +11,10 @@ import android.os.Looper
 import android.provider.MediaStore
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.currentCoroutineContext
+import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -64,11 +67,18 @@ class MediaRepository(context: Context) {
     }
 
     fun reload() {
-        scope.launch {
-            val items = queryImages() + queryVideos()
-            _media.value = items.sortedByDescending { it.date }
+        synchronized(this) {
+            reloadJob?.cancel()
+            reloadJob = scope.launch {
+                val items = queryImages() + queryVideos()
+                currentCoroutineContext().ensureActive()
+                _media.value = items.sortedByDescending { it.date }
+            }
         }
     }
+
+    @Volatile
+    private var reloadJob: Job? = null
 
     private fun queryImages(): List<MediaItem> = query(
         collection = MediaStore.Images.Media.EXTERNAL_CONTENT_URI,
@@ -123,6 +133,8 @@ class MediaRepository(context: Context) {
                     )
                 }
             }
+        } catch (e: kotlinx.coroutines.CancellationException) {
+            throw e
         } catch (e: Exception) {
             // нет доступа или пустое хранилище — вернём что есть
         }

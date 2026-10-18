@@ -1,5 +1,6 @@
 package dev.aezochka.glimpse.ui
 
+import android.app.Activity
 import android.app.RecoverableSecurityException
 import android.content.ContentValues
 import android.content.Intent
@@ -67,6 +68,9 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialShapes
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.SegmentedButton
+import androidx.compose.material3.SegmentedButtonDefaults
+import androidx.compose.material3.SingleChoiceSegmentedButtonRow
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.toShape
@@ -173,6 +177,7 @@ fun GalleryScreen(
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
     var openAlbum by rememberSaveable { mutableStateOf<String?>(null) }
+    var mediaFilter by rememberSaveable { mutableIntStateOf(0) }
     val pickMode = pickConfig != null
 
     // мультивыбор в обычном режиме
@@ -180,14 +185,21 @@ fun GalleryScreen(
     val selected: SnapshotStateMap<String, Boolean> = remember { mutableStateMapOf() }
     val selectedCount = selected.values.count { it }
 
-    val albums = remember(media) {
-        media.groupBy { it.bucket.ifBlank { "Без альбома" } }
+    val filteredMedia = remember(media, mediaFilter) {
+        when (mediaFilter) {
+            1 -> media.filterNot { it.isVideo }
+            2 -> media.filter { it.isVideo }
+            else -> media
+        }
+    }
+    val albums = remember(filteredMedia) {
+        filteredMedia.groupBy { it.bucket.ifBlank { "Без альбома" } }
             .map { (name, list) -> Album(name, list) }
             .sortedByDescending { it.items.firstOrNull()?.date ?: 0L }
     }
-    val items = remember(media, openAlbum) {
-        if (openAlbum != null) media.filter { it.bucket.ifBlank { "Без альбома" } == openAlbum }
-        else media
+    val items = remember(filteredMedia, openAlbum) {
+        if (openAlbum != null) filteredMedia.filter { it.bucket.ifBlank { "Без альбома" } == openAlbum }
+        else filteredMedia
     }
 
     fun toggle(item: MediaItem) {
@@ -204,6 +216,16 @@ fun GalleryScreen(
     val camLauncher = rememberLauncherForActivityResult(ActivityResultContracts.TakePicture()) { ok ->
         val uri = camUri
         camUri = null
+        if (uri != null && ok) {
+            scope.launch(Dispatchers.IO) {
+                runCatching {
+                    val values = ContentValues().apply {
+                        put(MediaStore.Images.Media.IS_PENDING, 0)
+                    }
+                    context.contentResolver.update(uri, values, null, null)
+                }
+            }
+        }
         if (uri != null && !ok) {
             scope.launch(Dispatchers.IO) { runCatching { context.contentResolver.delete(uri, null, null) } }
         }
@@ -219,11 +241,20 @@ fun GalleryScreen(
             put(MediaStore.Images.Media.DISPLAY_NAME, "IMG_${System.currentTimeMillis()}.jpg")
             put(MediaStore.Images.Media.MIME_TYPE, "image/jpeg")
             put(MediaStore.Images.Media.RELATIVE_PATH, "DCIM/Camera")
+            put(MediaStore.Images.Media.IS_PENDING, 1)
         }
         val uri = context.contentResolver.insert(MediaStore.Images.Media.EXTERNAL_CONTENT_URI, values)
         if (uri != null) {
             camUri = uri
-            camLauncher.launch(uri)
+            runCatching { camLauncher.launch(uri) }.onFailure {
+                camUri = null
+                scope.launch(Dispatchers.IO) {
+                    runCatching { context.contentResolver.delete(uri, null, null) }
+                }
+                Toast.makeText(context, "Не удалось открыть камеру", Toast.LENGTH_SHORT).show()
+            }
+        } else {
+            Toast.makeText(context, "Не удалось подготовить фото", Toast.LENGTH_SHORT).show()
         }
     }
 
@@ -231,8 +262,10 @@ fun GalleryScreen(
     val deleteLauncher = rememberLauncherForActivityResult(
         ActivityResultContracts.StartIntentSenderForResult()
     ) {
-        selectionMode = false
-        selected.clear()
+        if (it.resultCode == Activity.RESULT_OK) {
+            selectionMode = false
+            selected.clear()
+        }
     }
 
     fun deleteSelected() {
@@ -361,10 +394,36 @@ fun GalleryScreen(
                     }
                 }
 
+                // ---- фильтр типа медиа — настоящий M3E segmented button ----
+                if (openAlbum == null && !pickMode && !selectionMode) {
+                    SingleChoiceSegmentedButtonRow(
+                        modifier = Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 8.dp),
+                    ) {
+                        listOf("Все", "Фото", "Видео").forEachIndexed { index, label ->
+                            SegmentedButton(
+                                selected = mediaFilter == index,
+                                onClick = {
+                                    mediaFilter = index
+                                    scope.launch { gridState.scrollToItem(0) }
+                                },
+                                shape = SegmentedButtonDefaults.itemShape(index = index, count = 3),
+                            ) { Text(label) }
+                        }
+                    }
+                }
+
                 // ---- контент: вкладки листаются свайпом (пейджер) ----
                 Box(Modifier.weight(1f)) {
                     when {
                         media.isEmpty() -> EmptyState("Пока пусто")
+                        items.isEmpty() -> EmptyState(
+                            when {
+                                openAlbum != null -> "В альбоме пока пусто"
+                                mediaFilter == 1 -> "Фото не найдены"
+                                mediaFilter == 2 -> "Видео не найдены"
+                                else -> "Пока пусто"
+                            },
+                        )
                         openAlbum != null || pickMode || selectionMode -> PhotosGrid(
                             items = items,
                             pickConfig = pickConfig,
