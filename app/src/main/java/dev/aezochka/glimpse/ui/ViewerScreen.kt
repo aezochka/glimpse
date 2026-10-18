@@ -100,7 +100,12 @@ fun ViewerScreen(
             if (item == null) {
                 Box(Modifier.fillMaxSize())
             } else if (item.isVideo) {
-                VideoPage(item, onTap = { chrome = !chrome }, chrome = chrome)
+                VideoPage(
+                    item = item,
+                    active = page == pagerState.currentPage,
+                    onTap = { chrome = !chrome },
+                    chrome = chrome,
+                )
             } else {
                 ZoomPage(item, onTap = { chrome = !chrome })
             }
@@ -256,14 +261,17 @@ private fun ZoomPage(item: MediaItem, onTap: () -> Unit) {
  */
 @OptIn(ExperimentalMaterial3ExpressiveApi::class)
 @Composable
-private fun VideoPage(item: MediaItem, onTap: () -> Unit, chrome: Boolean) {
+private fun VideoPage(item: MediaItem, active: Boolean, onTap: () -> Unit, chrome: Boolean) {
     val context = LocalContext.current
     val player = remember {
         ExoPlayer.Builder(context).build().apply {
             setMediaItem(androidx.media3.common.MediaItem.fromUri(item.uri))
             prepare()
-            playWhenReady = true
+            playWhenReady = active
         }
+    }
+    LaunchedEffect(active) {
+        if (active) player.play() else player.pause()
     }
     DisposableEffect(Unit) {
         onDispose { player.release() }

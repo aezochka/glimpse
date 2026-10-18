@@ -11,8 +11,8 @@ android {
         applicationId = "dev.aezochka.glimpse"
         minSdk = 26
         targetSdk = 36
-        versionCode = 4
-        versionName = "1.3"
+        versionCode = 5
+        versionName = "1.4"
     }
 
     buildTypes {
@@ -45,6 +45,9 @@ dependencies {
     implementation(libs.coil.compose)
     implementation(libs.media3.exoplayer)
     implementation(libs.media3.ui)
+    implementation(libs.exifinterface)
     implementation(libs.m3e.compose)
+
+    testImplementation("junit:junit:4.13.2")
     debugImplementation(libs.compose.ui.tooling)
 }

@@ -14,6 +14,7 @@ import android.graphics.RectF
 import android.net.Uri
 import android.os.Build
 import android.provider.MediaStore
+import androidx.exifinterface.media.ExifInterface
 
 enum class FilterPreset(val label: String) {
     NONE("Оригинал"),
@@ -117,10 +118,36 @@ fun decodeBitmap(resolver: ContentResolver, uri: Uri, maxDim: Int): Bitmap? {
         var sample = 1
         while (maxOf(w, h) / sample > maxDim) sample *= 2
         val opts = BitmapFactory.Options().apply { inSampleSize = sample }
-        resolver.openInputStream(uri)?.use { BitmapFactory.decodeStream(it, null, opts) }
+        val decoded = resolver.openInputStream(uri)?.use { BitmapFactory.decodeStream(it, null, opts) } ?: return null
+        val orientation = runCatching {
+            resolver.openInputStream(uri)?.use { stream ->
+                ExifInterface(stream).getAttributeInt(
+                    ExifInterface.TAG_ORIENTATION,
+                    ExifInterface.ORIENTATION_NORMAL,
+                )
+            }
+        }.getOrNull() ?: ExifInterface.ORIENTATION_NORMAL
+        orientBitmap(decoded, orientation)
     } catch (e: Exception) {
         null
     }
+}
+
+/** Apply EXIF orientation to decoded pixels, including mirrored and transposed images. */
+internal fun orientBitmap(bitmap: Bitmap, orientation: Int): Bitmap {
+    val matrix = Matrix().apply {
+        when (orientation) {
+            ExifInterface.ORIENTATION_FLIP_HORIZONTAL -> setScale(-1f, 1f)
+            ExifInterface.ORIENTATION_ROTATE_180 -> setRotate(180f)
+            ExifInterface.ORIENTATION_FLIP_VERTICAL -> setScale(1f, -1f)
+            ExifInterface.ORIENTATION_TRANSPOSE -> { setRotate(90f); postScale(-1f, 1f) }
+            ExifInterface.ORIENTATION_ROTATE_90 -> setRotate(90f)
+            ExifInterface.ORIENTATION_TRANSVERSE -> { setRotate(-90f); postScale(-1f, 1f) }
+            ExifInterface.ORIENTATION_ROTATE_270 -> setRotate(-90f)
+            else -> return bitmap
+        }
+    }
+    return Bitmap.createBitmap(bitmap, 0, 0, bitmap.width, bitmap.height, matrix, true)
 }
 
 /** Поворот кратно 90° + зеркало. Возвращает новый bitmap. */
@@ -196,12 +223,13 @@ fun saveBitmap(context: Context, bitmap: Bitmap): Uri? {
     }
     val uri = resolver.insert(MediaStore.Images.Media.EXTERNAL_CONTENT_URI, values) ?: return null
     return try {
-        resolver.openOutputStream(uri)?.use { out ->
+        val wroteImage = resolver.openOutputStream(uri)?.use { out ->
             bitmap.compress(Bitmap.CompressFormat.JPEG, 95, out)
-        }
+        } ?: false
+        if (!wroteImage) error("No image output written")
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
             val done = ContentValues().apply { put(MediaStore.Images.Media.IS_PENDING, 0) }
-            resolver.update(uri, done, null, null)
+            if (resolver.update(uri, done, null, null) != 1) error("Could not publish image")
         }
         uri
     } catch (e: Exception) {

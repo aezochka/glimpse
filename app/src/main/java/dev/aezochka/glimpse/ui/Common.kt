@@ -127,11 +127,27 @@ fun durationLabel(ms: Long): String {
     return if (h > 0) "%d:%02d:%02d".format(h, m, s) else "%d:%02d".format(m, s)
 }
 
+internal fun hasMediaAccess(
+    sdkInt: Int,
+    legacyStorageGranted: Boolean = false,
+    imagesGranted: Boolean = false,
+    videosGranted: Boolean = false,
+    visualSelectedGranted: Boolean = false,
+): Boolean = when {
+    sdkInt >= 34 -> imagesGranted || videosGranted || visualSelectedGranted
+    sdkInt >= 33 -> imagesGranted || videosGranted
+    else -> legacyStorageGranted
+}
+
 fun mediaPermissions(): Array<String> = when {
-    Build.VERSION.SDK_INT >= 33 -> arrayOf(
+    Build.VERSION.SDK_INT >= 34 -> arrayOf(
         Manifest.permission.READ_MEDIA_IMAGES,
         Manifest.permission.READ_MEDIA_VIDEO,
         Manifest.permission.READ_MEDIA_VISUAL_USER_SELECTED,
+    )
+    Build.VERSION.SDK_INT >= 33 -> arrayOf(
+        Manifest.permission.READ_MEDIA_IMAGES,
+        Manifest.permission.READ_MEDIA_VIDEO,
     )
     else -> arrayOf(Manifest.permission.READ_EXTERNAL_STORAGE)
 }
