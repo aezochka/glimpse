@@ -15,10 +15,22 @@ android {
         versionName = "1.4"
     }
 
+    val ksPassword: String? = System.getenv("KEYSTORE_PASSWORD")
+    val ksFile = rootProject.file("glimpse-release.jks")
+
     buildTypes {
         release {
             isMinifyEnabled = false
-            signingConfig = signingConfigs.getByName("debug")
+            signingConfig = if (ksPassword != null && ksFile.exists()) {
+                signingConfigs.create("ci") {
+                    storeFile = ksFile
+                    storePassword = ksPassword
+                    keyAlias = "glimpse"
+                    keyPassword = ksPassword
+                }
+            } else {
+                signingConfigs.getByName("debug")
+            }
         }
     }
 

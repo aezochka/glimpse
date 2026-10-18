@@ -30,14 +30,23 @@ jobs:
       - name: Install Android platform 37
         run: yes | sdkmanager "platforms;android-37" > /dev/null || true
 
+      - name: Decode release keystore
+        env:
+          KEYSTORE_PASSWORD: ${{ secrets.GLIMPSE_KEYSTORE_PASSWORD }}
+        run: echo "${{ secrets.GLIMPSE_KEYSTORE_BASE64 }}" | base64 -d > glimpse-release.jks
+
       - name: Unit tests
         run: ./gradlew :app:testDebugUnitTest --no-daemon --stacktrace
 
       - name: Build debug APK
         run: ./gradlew :app:assembleDebug --no-daemon --stacktrace
+        env:
+          KEYSTORE_PASSWORD: ${{ secrets.GLIMPSE_KEYSTORE_PASSWORD }}
 
       - name: Build release APK
         run: ./gradlew :app:assembleRelease --no-daemon --stacktrace
+        env:
+          KEYSTORE_PASSWORD: ${{ secrets.GLIMPSE_KEYSTORE_PASSWORD }}
 
       - name: Rename APKs
         run: |
