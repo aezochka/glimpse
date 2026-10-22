@@ -13,6 +13,7 @@ android {
         targetSdk = 36
         versionCode = 5
         versionName = "1.4"
+        testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
 
     val ksPassword: String? = System.getenv("KEYSTORE_PASSWORD")
@@ -61,5 +62,11 @@ dependencies {
     implementation(libs.m3e.compose)
 
     testImplementation("junit:junit:4.13.2")
+    androidTestImplementation(platform(libs.compose.bom))
+    androidTestImplementation("androidx.compose.ui:ui-test-junit4")
+    androidTestImplementation("androidx.test:runner:1.7.0")
+    androidTestImplementation("androidx.test:rules:1.7.0")
+    androidTestImplementation("androidx.test.ext:junit:1.3.0")
+    debugImplementation("androidx.compose.ui:ui-test-manifest")
     debugImplementation(libs.compose.ui.tooling)
 }

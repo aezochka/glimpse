@@ -92,6 +92,7 @@ import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -432,7 +433,7 @@ fun GalleryScreen(
                         )
                         else -> androidx.compose.foundation.pager.HorizontalPager(
                             state = tabPager,
-                            modifier = Modifier.fillMaxSize(),
+                            modifier = Modifier.fillMaxSize().testTag("galleryPager"),
                         ) { page ->
                             if (page == 0) {
                                 PhotosGrid(
@@ -579,7 +580,7 @@ fun PhotoCell(
 ) {
     val context = LocalContext.current
     val checkShape = MaterialShapes.Cookie9Sided.toShape()
-    Box(modifier.aspectRatio(1f).cellPress(onClick, onLongClick)) {
+    Box(modifier.aspectRatio(1f).testTag("cell").cellPress(onClick, onLongClick)) {
         if (item.isVideo) {
             val thumb by rememberVideoThumb(item)
             if (thumb != null) {
