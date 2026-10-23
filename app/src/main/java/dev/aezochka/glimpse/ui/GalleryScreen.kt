@@ -412,7 +412,7 @@ fun GalleryScreen(
                             mediaFilter = index
                             scope.launch { gridState.scrollToItem(0) }
                         },
-                        modifier = Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 8.dp),
+                        modifier = Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 6.dp),
                     )
                 }
 
@@ -493,7 +493,13 @@ fun GalleryScreen(
                 )
                 else -> TabsBar(
                     tab = tabPager.settledPage,
-                    onSelect = { t -> scope.launch { tabPager.animateScrollToPage(t) } },
+                    onSelect = { t ->
+                        scope.launch {
+                            // тап по активной вкладке — наверх (привычка из Photos)
+                            if (t == tabPager.settledPage) gridState.animateScrollToItem(0)
+                            else tabPager.animateScrollToPage(t)
+                        }
+                    },
                     modifier = Modifier.align(Alignment.BottomCenter),
                 )
             }
@@ -591,7 +597,7 @@ private fun GalleryHeader(
             Row(
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.spacedBy(8.dp),
-                modifier = Modifier.padding(top = 2.dp, bottom = 10.dp),
+                modifier = Modifier.padding(top = 2.dp, bottom = 6.dp),
             ) {
                 when {
                     selectionMode -> StatChip(pill, "$selectedCount", "выбрано", true)

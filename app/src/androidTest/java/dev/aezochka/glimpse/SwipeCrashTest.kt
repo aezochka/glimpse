@@ -123,7 +123,8 @@ class SwipeCrashTest {
         val resolver = ctx.contentResolver
         val values = ContentValues().apply {
             put(MediaStore.Downloads.DISPLAY_NAME, "glimpse_$name.png")
-            put(MediaStore.Downloads.MIME_TYPE, "image/png")
+            // octet-stream: файл не попадает в MediaStore.Images и не мусорит в галерее
+            put(MediaStore.Downloads.MIME_TYPE, "application/octet-stream")
             put(MediaStore.Downloads.RELATIVE_PATH, "Download/GlimpseShots")
             put(MediaStore.Downloads.IS_PENDING, 1)
         }
