@@ -291,6 +291,7 @@ fun EditorScreen(item: MediaItem, onBack: () -> Unit, onSaved: () -> Unit) {
 // Сцена с фото
 // =====================================================================
 
+@OptIn(ExperimentalMaterial3ExpressiveApi::class)
 @Composable
 private fun PhotoStage(
     preview: Bitmap?,
