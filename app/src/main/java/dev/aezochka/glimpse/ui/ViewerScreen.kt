@@ -28,6 +28,7 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
@@ -219,6 +220,13 @@ fun ViewerScreen(
                         current?.let { shareItem(context, it) }
                     }
                     if (current != null && !current.isVideo) {
+                        // тонкий разделитель: две зоны нажатия читаются как разные
+                        Box(
+                            Modifier
+                                .width(1.dp)
+                                .height(24.dp)
+                                .background(Color.White.copy(alpha = 0.18f)),
+                        )
                         GlassAction("Изменить", Icons.Rounded.Edit) { onEdit(current) }
                     }
                 }
@@ -237,8 +245,8 @@ private fun Modifier.glassPill(): Modifier {
     val pill = MaterialShapes.Pill.toShape()
     return this
         .clip(pill)
-        .background(Color.White.copy(alpha = 0.13f))
-        .border(1.dp, Color.White.copy(alpha = 0.16f), pill)
+        .background(Color.White.copy(alpha = 0.16f))
+        .border(1.dp, Color.White.copy(alpha = 0.22f), pill)
 }
 
 @Composable
