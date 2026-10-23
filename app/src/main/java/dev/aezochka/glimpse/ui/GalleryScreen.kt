@@ -266,6 +266,14 @@ fun GalleryScreen(
         if (openAlbum != null) filteredMedia.filter { it.bucket.ifBlank { "Без альбома" } == openAlbum }
         else filteredMedia
     }
+    // счётчики шапки: O(n) по всей библиотеке, поэтому считаем один раз,
+    // а не на каждой перерисовке (иначе прокрутка большой галереи подтормаживает)
+    val photoCount = remember(items, media, openAlbum) {
+        if (openAlbum != null) items.count { !it.isVideo } else media.count { !it.isVideo }
+    }
+    val videoCount = remember(items, media, openAlbum) {
+        if (openAlbum != null) items.count { it.isVideo } else media.count { it.isVideo }
+    }
 
     fun toggle(item: MediaItem) {
         val k = item.stableKey()
@@ -408,12 +416,12 @@ fun GalleryScreen(
                         pickMode -> "Glimpse"
                         else -> "Галерея"
                     },
-                    photos = if (openAlbum != null) items.count { !it.isVideo } else media.count { !it.isVideo },
-                    videos = if (openAlbum != null) items.count { it.isVideo } else media.count { it.isVideo },
+                    photos = photoCount,
+                    videos = videoCount,
                     selectionMode = selectionMode,
                     selectedCount = selectedCount,
                     pickMode = pickMode,
-                    collapsed = gridState.firstVisibleItemIndex > 0,
+                    gridState = gridState,
                     showCamera = openAlbum == null && !pickMode && !selectionMode,
                     onCamera = ::takePhoto,
                     onExitSelection = ::exitSelection,
@@ -546,7 +554,7 @@ private fun GalleryHeader(
     selectionMode: Boolean,
     selectedCount: Int,
     pickMode: Boolean,
-    collapsed: Boolean,
+    gridState: androidx.compose.foundation.lazy.grid.LazyGridState,
     showCamera: Boolean,
     onCamera: () -> Unit,
     onExitSelection: () -> Unit,
@@ -555,6 +563,8 @@ private fun GalleryHeader(
     val flower = MaterialShapes.Flower.toShape()
     val cookie = MaterialShapes.Cookie12Sided.toShape()
     val pill = MaterialShapes.Pill.toShape()
+    // читаем скролл здесь, а не уровнем выше: перерисовывается только шапка
+    val collapsed = gridState.firstVisibleItemIndex > 0
     // акцент тает, когда сетка уезжает под шапку
     val accent by animateFloatAsState(
         targetValue = if (collapsed) 0f else 1f,
