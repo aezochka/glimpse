@@ -20,8 +20,6 @@ import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
-import androidx.compose.animation.scaleIn
-import androidx.compose.animation.scaleOut
 import androidx.compose.animation.slideInHorizontally
 import androidx.compose.animation.slideOutHorizontally
 import androidx.compose.animation.togetherWith
@@ -40,6 +38,7 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
@@ -380,8 +379,6 @@ fun GalleryScreen(
 
     BackHandler(enabled = selectionMode) { exitSelection() }
 
-    val cookieShape = MaterialShapes.Cookie9Sided.toShape()
-
     // общий grid-state: скролл НЕ сбрасывается при входе/выходе из выбора
     val gridState = androidx.compose.foundation.lazy.grid.rememberLazyGridState()
     // вкладки листаются свайпом
@@ -392,7 +389,12 @@ fun GalleryScreen(
             Column(Modifier.fillMaxSize()) {
                 // ---- шапка: герой-блок с M3E-формами ----
                 GalleryHeader(
-                    title = openAlbum ?: if (pickMode) "Glimpse" else "Галерея",
+                    title = when {
+                        selectionMode -> "Выбрано: $selectedCount"
+                        openAlbum != null -> openAlbum
+                        pickMode -> "Glimpse"
+                        else -> "Галерея"
+                    },
                     photos = if (openAlbum != null) items.count { !it.isVideo } else media.count { !it.isVideo },
                     videos = if (openAlbum != null) items.count { it.isVideo } else media.count { it.isVideo },
                     selectionMode = selectionMode,
@@ -484,8 +486,6 @@ fun GalleryScreen(
                     count = selectedCount,
                     onShare = ::shareSelected,
                     onDelete = ::deleteSelected,
-                    onClose = ::exitSelection,
-                    cookieShape = cookieShape,
                     modifier = Modifier.align(Alignment.BottomCenter),
                 )
                 openAlbum != null -> BackAlbumBar(
@@ -595,22 +595,24 @@ private fun GalleryHeader(
                     }
                 }
             }
-            Row(
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
-                modifier = Modifier.padding(top = 2.dp, bottom = 6.dp),
-            ) {
-                when {
-                    selectionMode -> StatChip(pill, "$selectedCount", "выбрано", true)
-                    pickMode -> StatChip(pill, "…", "Выберите файлы", false)
-                    else -> Text(
-                        buildList {
-                            if (photos > 0) add("${formatCount(photos)} фото")
-                            if (videos > 0) add("${formatCount(videos)} видео")
-                        }.joinToString(" · ").ifEmpty { "пока пусто" },
-                        style = MaterialTheme.typography.labelLarge,
-                        color = scheme.onSurfaceVariant,
-                    )
+            if (!selectionMode) {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    modifier = Modifier.padding(top = 2.dp, bottom = 6.dp),
+                ) {
+                    if (pickMode) {
+                        StatChip(pill, "…", "Выберите файлы", false)
+                    } else {
+                        Text(
+                            buildList {
+                                if (photos > 0) add("${formatCount(photos)} фото")
+                                if (videos > 0) add("${formatCount(videos)} видео")
+                            }.joinToString(" · ").ifEmpty { "пока пусто" },
+                            style = MaterialTheme.typography.labelLarge,
+                            color = scheme.onSurfaceVariant,
+                        )
+                    }
                 }
             }
         }
@@ -964,92 +966,68 @@ fun TabPill(active: Boolean, icon: ImageVector, label: String, onClick: () -> Un
     }
 }
 
-/** Панель выбора: плавающая M3E-пилюля с cookie-счётчиком. */
+/**
+ * Панель выбора: две явные пилюли вместо ряда иконок.
+ * Счётчик живёт в шапке («Выбрано: N») — дублировать его здесь не нужно.
+ */
+@OptIn(ExperimentalMaterial3ExpressiveApi::class)
 @Composable
 private fun SelectBar(
     count: Int,
     onShare: () -> Unit,
     onDelete: () -> Unit,
-    onClose: () -> Unit,
-    cookieShape: androidx.compose.ui.graphics.Shape,
     modifier: Modifier = Modifier,
 ) {
     val scheme = MaterialTheme.colorScheme
+    val pill = MaterialShapes.Pill.toShape()
+    val enabled = count > 0
     Row(
         modifier
             .padding(horizontal = 16.dp, vertical = 8.dp)
             .navigationBarsPadding()
-            .shadow(8.dp, RoundedCornerShape(999.dp))
-            .clip(RoundedCornerShape(999.dp))
-            .background(scheme.surfaceContainer)
-            .padding(8.dp),
+            .shadow(10.dp, pill, clip = false)
+            .clip(pill)
+            .background(scheme.surfaceContainerHigh)
+            .padding(6.dp),
         verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(6.dp),
+        horizontalArrangement = Arrangement.spacedBy(2.dp),
     ) {
-        // закрыть
+        SelectAction("Поделиться", Icons.Rounded.Share, scheme.onSurface, enabled, onShare)
         Box(
             Modifier
-                .pillPress(onClose)
-                .size(44.dp)
-                .clip(CircleShape)
-                .background(scheme.surfaceContainerHigh),
-            contentAlignment = Alignment.Center,
-        ) {
-            Icon(Icons.Rounded.Close, "Выйти из выбора", tint = scheme.onSurfaceVariant)
-        }
-        // счётчик в cookie-форме
-        AnimatedContent(
-            targetState = count,
-            label = "selCount",
-            transitionSpec = {
-                (scaleIn(Motion.spatial()) + fadeIn(Motion.spatial())) togetherWith
-                    (scaleOut(Motion.effects()) + fadeOut(Motion.effects()))
-            },
-        ) { n ->
-            Box(
-                Modifier
-                    .clip(cookieShape)
-                    .background(if (n > 0) scheme.primaryContainer else scheme.surfaceContainerHigh)
-                    .padding(horizontal = 14.dp, vertical = 10.dp),
-                contentAlignment = Alignment.Center,
-            ) {
-                Text(
-                    "$n",
-                    style = MaterialTheme.typography.labelLarge,
-                    fontWeight = FontWeight.Bold,
-                    color = if (n > 0) scheme.onPrimaryContainer else scheme.onSurfaceVariant,
-                )
-            }
-        }
-        Spacer(Modifier.weight(1f))
-        // поделиться
-        Box(
-            Modifier
-                .pillPress(onShare)
-                .size(44.dp)
-                .clip(CircleShape)
-                .background(scheme.surfaceContainerHigh),
-            contentAlignment = Alignment.Center,
-        ) {
-            Icon(
-                Icons.Rounded.Share, "Поделиться",
-                tint = if (count > 0) scheme.primary else scheme.onSurfaceVariant,
-            )
-        }
-        // удалить
-        Box(
-            Modifier
-                .pillPress(onDelete)
-                .size(44.dp)
-                .clip(CircleShape)
-                .background(scheme.errorContainer),
-            contentAlignment = Alignment.Center,
-        ) {
-            Icon(
-                Icons.Rounded.Delete, "Удалить",
-                tint = if (count > 0) scheme.error else scheme.onSurfaceVariant,
-            )
-        }
+                .width(1.dp)
+                .height(24.dp)
+                .background(scheme.outline.copy(alpha = 0.35f)),
+        )
+        SelectAction("Удалить", Icons.Rounded.Delete, scheme.error, enabled, onDelete)
+    }
+}
+
+@OptIn(ExperimentalMaterial3ExpressiveApi::class)
+@Composable
+private fun SelectAction(
+    label: String,
+    icon: ImageVector,
+    tint: Color,
+    enabled: Boolean,
+    onClick: () -> Unit,
+) {
+    val pill = MaterialShapes.Pill.toShape()
+    val alpha = if (enabled) 1f else 0.38f
+    Row(
+        Modifier
+            .then(if (enabled) Modifier.pillPress(onClick) else Modifier)
+            .clip(pill)
+            .padding(horizontal = 16.dp, vertical = 12.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Icon(icon, label, tint = tint.copy(alpha = alpha), modifier = Modifier.size(20.dp))
+        Spacer(Modifier.width(8.dp))
+        Text(
+            label,
+            style = MaterialTheme.typography.labelLarge,
+            color = tint.copy(alpha = alpha),
+        )
     }
 }
 
