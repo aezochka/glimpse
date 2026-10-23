@@ -47,7 +47,7 @@ jobs:
             sleep 2
             adb exec-out screencap -p > screen.png || true
             mkdir -p shots
-            for f in 01_gallery 02_albums 03_selection 04_viewer 05_viewer_next; do adb exec-out run-as dev.aezochka.glimpse cat "/storage/emulated/0/Android/data/dev.aezochka.glimpse/files/shots/$f.png" > "shots/$f.png" || true; done
+            adb pull /sdcard/Download/GlimpseShots shots || true
             ls -la shots || true
             grep -A60 -E "FATAL EXCEPTION" logcat.txt | head -200 > crash.txt || true
       - name: Upload artifacts

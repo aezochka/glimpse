@@ -28,8 +28,6 @@ import org.junit.Rule
 import org.junit.Test
 import org.junit.rules.RuleChain
 import org.junit.runner.RunWith
-import java.io.File
-import java.io.FileOutputStream
 
 /**
  * Регресс на «краш при свайпе»: сидим фото+видео в MediaStore,
@@ -116,11 +114,29 @@ class SwipeCrashTest {
             return
         }
         val ctx = InstrumentationRegistry.getInstrumentation().targetContext
-        val dir = File(ctx.getExternalFilesDir(null), "shots").apply { mkdirs() }
-        val file = File(dir, "$name.png")
+        // Downloads, а не Pictures: файлы переживают uninstall (AGP удаляет app после теста,
+        // run-as тогда не работает) и не попадают в нашу галерею
+        val resolver = ctx.contentResolver
+        val values = ContentValues().apply {
+            put(MediaStore.Downloads.DISPLAY_NAME, "glimpse_$name.png")
+            put(MediaStore.Downloads.MIME_TYPE, "image/png")
+            put(MediaStore.Downloads.RELATIVE_PATH, "Download/GlimpseShots")
+            put(MediaStore.Downloads.IS_PENDING, 1)
+        }
+        val uri = resolver.insert(MediaStore.Downloads.EXTERNAL_CONTENT_URI, values)
+        if (uri == null) {
+            Log.e("GlimpseShot", "не вставил $name в MediaStore")
+            return
+        }
         try {
-            FileOutputStream(file).use { bmp.compress(Bitmap.CompressFormat.PNG, 100, it) }
-            Log.i("GlimpseShot", "saved ${file.absolutePath} (${file.length()} b)")
+            resolver.openOutputStream(uri)!!.use { bmp.compress(Bitmap.CompressFormat.PNG, 100, it) }
+            resolver.update(
+                uri,
+                ContentValues().apply { put(MediaStore.Downloads.IS_PENDING, 0) },
+                null,
+                null,
+            )
+            Log.i("GlimpseShot", "saved $name → Download/GlimpseShots")
         } catch (e: Exception) {
             Log.e("GlimpseShot", "не записал $name", e)
         }
