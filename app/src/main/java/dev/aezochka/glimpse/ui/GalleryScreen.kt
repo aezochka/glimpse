@@ -391,7 +391,7 @@ fun GalleryScreen(
                 GalleryHeader(
                     title = when {
                         selectionMode -> "Выбрано: $selectedCount"
-                        openAlbum != null -> openAlbum
+                        openAlbum != null -> openAlbum.orEmpty()
                         pickMode -> "Glimpse"
                         else -> "Галерея"
                     },
