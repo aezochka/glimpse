@@ -426,7 +426,7 @@ fun GalleryScreen(
                         selectedIndex = mediaFilter,
                         onSelect = { index ->
                             mediaFilter = index
-                            scope.launch { gridState.scrollToItem(0) }
+                            scope.launch { gridState.animateScrollToItem(0) }
                         },
                         modifier = Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 6.dp),
                     )
@@ -465,7 +465,12 @@ fun GalleryScreen(
                                     },
                                 )
                             } else {
-                                AlbumsGrid(albums) { openAlbum = it.name }
+                                AlbumsGrid(albums) { album ->
+                                    // альбом открывается на первой вкладке: иначе пейджер
+                                    // остаётся на «Альбомах», которых в этом режиме уже нет
+                                    openAlbum = album.name
+                                    scope.launch { tabPager.scrollToPage(0) }
+                                }
                             }
                         }
                     }
