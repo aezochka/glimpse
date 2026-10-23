@@ -46,6 +46,8 @@ jobs:
             ./gradlew :app:connectedDebugAndroidTest --no-daemon || echo "TESTS_FAILED" > failed.flag
             sleep 2
             adb exec-out screencap -p > screen.png || true
+            adb shell ls -R /sdcard/Android/data/dev.aezochka.glimpse/files/shots || true
+            adb shell ls -R /data/data/dev.aezochka.glimpse/files || true
             adb pull /sdcard/Android/data/dev.aezochka.glimpse/files/shots shots || true
             grep -A60 -E "FATAL EXCEPTION" logcat.txt | head -200 > crash.txt || true
       - name: Upload artifacts

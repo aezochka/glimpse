@@ -8,11 +8,12 @@ import android.graphics.Color
 import android.graphics.Paint
 import android.os.Build
 import android.provider.MediaStore
+import android.util.Log
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
 import androidx.compose.ui.test.longClick
+import androidx.compose.ui.test.onAllNodesWithContentDescription
 import androidx.compose.ui.test.onAllNodesWithTag
 import androidx.compose.ui.test.onFirst
-import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performTouchInput
@@ -107,14 +108,21 @@ class SwipeCrashTest {
 
     /** Скриншот корня в external-files: дизайн можно посмотреть не на телефоне. */
     private fun shot(name: String) {
-        runCatching {
-            compose.waitForIdle()
-            Thread.sleep(1500) // дать Coil дорисовать превью
-            val bmp = InstrumentationRegistry.getInstrumentation().uiAutomation.takeScreenshot()
-                ?: return@runCatching
-            val ctx = InstrumentationRegistry.getInstrumentation().targetContext
-            val dir = File(ctx.getExternalFilesDir(null), "shots").apply { mkdirs() }
-            FileOutputStream(File(dir, "$name.png")).use { bmp.compress(Bitmap.CompressFormat.PNG, 100, it) }
+        compose.waitForIdle()
+        Thread.sleep(1500) // дать Coil дорисовать превью
+        val bmp = InstrumentationRegistry.getInstrumentation().uiAutomation.takeScreenshot()
+        if (bmp == null) {
+            Log.e("GlimpseShot", "takeScreenshot вернул null для $name")
+            return
+        }
+        val ctx = InstrumentationRegistry.getInstrumentation().targetContext
+        val dir = File(ctx.getExternalFilesDir(null), "shots").apply { mkdirs() }
+        val file = File(dir, "$name.png")
+        try {
+            FileOutputStream(file).use { bmp.compress(Bitmap.CompressFormat.PNG, 100, it) }
+            Log.i("GlimpseShot", "saved ${file.absolutePath} (${file.length()} b)")
+        } catch (e: Exception) {
+            Log.e("GlimpseShot", "не записал $name", e)
         }
     }
 
@@ -129,7 +137,7 @@ class SwipeCrashTest {
         // долгое нажатие → режим выбора
         compose.onAllNodesWithTag("cell").onFirst().performTouchInput { longClick() }
         shot("03_selection")
-        compose.onNodeWithContentDescription("Выйти из выбора").performClick()
+        compose.onAllNodesWithContentDescription("Выйти из выбора").onFirst().performClick()
         compose.waitForIdle()
         // вьювер: фото, затем следующая страница
         compose.onAllNodesWithTag("cell").onFirst().performClick()
