@@ -9,8 +9,10 @@ import android.graphics.Paint
 import android.os.Build
 import android.provider.MediaStore
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
+import androidx.compose.ui.test.longClick
 import androidx.compose.ui.test.onAllNodesWithTag
 import androidx.compose.ui.test.onFirst
+import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performTouchInput
@@ -25,6 +27,8 @@ import org.junit.Rule
 import org.junit.Test
 import org.junit.rules.RuleChain
 import org.junit.runner.RunWith
+import java.io.File
+import java.io.FileOutputStream
 
 /**
  * Регресс на «краш при свайпе»: сидим фото+видео в MediaStore,
@@ -99,6 +103,39 @@ class SwipeCrashTest {
         compose.waitUntil(15_000) {
             compose.onAllNodesWithTag("cell").fetchSemanticsNodes().isNotEmpty()
         }
+    }
+
+    /** Скриншот корня в external-files: дизайн можно посмотреть не на телефоне. */
+    private fun shot(name: String) {
+        runCatching {
+            compose.waitForIdle()
+            Thread.sleep(1500) // дать Coil дорисовать превью
+            val bmp = InstrumentationRegistry.getInstrumentation().uiAutomation.takeScreenshot()
+                ?: return@runCatching
+            val ctx = InstrumentationRegistry.getInstrumentation().targetContext
+            val dir = File(ctx.getExternalFilesDir(null), "shots").apply { mkdirs() }
+            FileOutputStream(File(dir, "$name.png")).use { bmp.compress(Bitmap.CompressFormat.PNG, 100, it) }
+        }
+    }
+
+    @Test
+    fun screenshots() {
+        waitCells()
+        shot("01_gallery")
+        compose.onNodeWithTag("galleryPager").performTouchInput { swipeLeft() }
+        shot("02_albums")
+        compose.onNodeWithTag("galleryPager").performTouchInput { swipeRight() }
+        compose.waitForIdle()
+        // долгое нажатие → режим выбора
+        compose.onAllNodesWithTag("cell").onFirst().performTouchInput { longClick() }
+        shot("03_selection")
+        compose.onNodeWithContentDescription("Выйти из выбора").performClick()
+        compose.waitForIdle()
+        // вьювер: фото, затем следующая страница
+        compose.onAllNodesWithTag("cell").onFirst().performClick()
+        shot("04_viewer")
+        compose.onNodeWithTag("viewerPager").performTouchInput { swipeLeft() }
+        shot("05_viewer_next")
     }
 
     @Test

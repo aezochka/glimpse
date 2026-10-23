@@ -46,7 +46,8 @@ jobs:
             ./gradlew :app:connectedDebugAndroidTest --no-daemon || echo "TESTS_FAILED" > failed.flag
             sleep 2
             adb exec-out screencap -p > screen.png || true
-            grep -A40 -E "FATAL EXCEPTION|AndroidRuntime" logcat.txt | head -200 > crash.txt || true
+            adb pull /sdcard/Android/data/dev.aezochka.glimpse/files/shots shots || true
+            grep -A60 -E "FATAL EXCEPTION" logcat.txt | head -200 > crash.txt || true
       - name: Upload artifacts
         if: always()
         uses: actions/upload-artifact@v4
@@ -55,6 +56,7 @@ jobs:
           path: |
             logcat.txt
             crash.txt
+            shots
             screen.png
             app/build/reports/androidTests/
             app/build/outputs/androidTest-results/
