@@ -391,8 +391,8 @@ fun GalleryScreen(
                 // ---- шапка: герой-блок с M3E-формами ----
                 GalleryHeader(
                     title = openAlbum ?: if (pickMode) "Glimpse" else "Галерея",
-                    photos = items.count { !it.isVideo },
-                    videos = items.count { it.isVideo },
+                    photos = if (openAlbum != null) items.count { !it.isVideo } else media.count { !it.isVideo },
+                    videos = if (openAlbum != null) items.count { it.isVideo } else media.count { it.isVideo },
                     selectionMode = selectionMode,
                     selectedCount = selectedCount,
                     pickMode = pickMode,
@@ -593,7 +593,10 @@ private fun GalleryHeader(
                     selectionMode -> StatChip(pill, "$selectedCount", "выбрано", true)
                     pickMode -> StatChip(pill, "…", "Выберите файлы", false)
                     else -> Text(
-                        "${formatCount(photos)} фото · ${formatCount(videos)} видео",
+                        buildList {
+                            if (photos > 0) add("${formatCount(photos)} фото")
+                            if (videos > 0) add("${formatCount(videos)} видео")
+                        }.joinToString(" · ").ifEmpty { "пока пусто" },
                         style = MaterialTheme.typography.labelLarge,
                         color = scheme.onSurfaceVariant,
                     )
