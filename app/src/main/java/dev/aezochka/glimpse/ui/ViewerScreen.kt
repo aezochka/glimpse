@@ -118,12 +118,14 @@ fun ViewerScreen(
             Box(
                 Modifier
                     .fillMaxSize()
+                    .background(Color.Black)
                     .graphicsLayer {
-                        // «карусельный» переход: соседняя страница гаснет и чуть мельче
+                        // «карусельный» переход: соседняя страница чуть мельче.
+                        // Альфу не трогаем: полупрозрачный слайд поверх галереи
+                        // читался как баг рендера.
                         val dist = ((pagerState.currentPage - page) + pagerState.currentPageOffsetFraction)
                             .absoluteValue.coerceIn(0f, 1f)
                         val vis = 1f - dist
-                        alpha = 0.35f + 0.65f * vis
                         val s = 0.94f + 0.06f * vis
                         scaleX = s
                         scaleY = s

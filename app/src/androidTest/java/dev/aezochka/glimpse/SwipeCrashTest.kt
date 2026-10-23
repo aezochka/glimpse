@@ -15,8 +15,10 @@ import androidx.compose.ui.test.onAllNodesWithContentDescription
 import androidx.compose.ui.test.onAllNodesWithTag
 import androidx.compose.ui.test.onFirst
 import androidx.compose.ui.test.onNodeWithTag
+import androidx.compose.ui.test.onRoot
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performTouchInput
+import androidx.compose.ui.test.printToLog
 import androidx.compose.ui.test.swipeLeft
 import androidx.compose.ui.test.swipeRight
 import androidx.compose.ui.test.swipeUp
@@ -108,6 +110,8 @@ class SwipeCrashTest {
     private fun shot(name: String) {
         compose.waitForIdle()
         Thread.sleep(1500) // дать Coil дорисовать превью
+        compose.mainClock.advanceTimeBy(800) // добить пружины переходов
+        compose.waitForIdle()
         val bmp = InstrumentationRegistry.getInstrumentation().uiAutomation.takeScreenshot()
         if (bmp == null) {
             Log.e("GlimpseShot", "takeScreenshot вернул null для $name")
@@ -157,6 +161,10 @@ class SwipeCrashTest {
         compose.waitForIdle()
         // вьювер: фото, затем следующая страница
         compose.onAllNodesWithTag("cell").onFirst().performClick()
+        compose.waitForIdle()
+        Thread.sleep(2000) // переход экранов (спринг) должен успеть завершиться
+        compose.waitForIdle()
+        runCatching { compose.onRoot(useUnmergedTree = true).printToLog("GlimpseTree") }
         shot("04_viewer")
         compose.onNodeWithTag("viewerPager").performTouchInput { swipeLeft() }
         shot("05_viewer_next")

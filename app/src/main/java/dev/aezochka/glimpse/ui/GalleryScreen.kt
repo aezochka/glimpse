@@ -87,6 +87,7 @@ import androidx.compose.runtime.snapshots.SnapshotStateMap
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
@@ -528,37 +529,40 @@ private fun GalleryHeader(
         animationSpec = Motion.effects(),
         label = "hdrAccent",
     )
-    Box(Modifier.fillMaxWidth()) {
+    Box(Modifier.fillMaxWidth().clipToBounds()) {
         Box(
             Modifier
                 .matchParentSize()
                 .graphicsLayer { alpha = accent }
                 .background(
                     Brush.verticalGradient(
-                        0f to scheme.primaryContainer.copy(alpha = 0.55f),
-                        0.7f to scheme.primaryContainer.copy(alpha = 0.10f),
+                        0f to scheme.primaryContainer.copy(alpha = 0.45f),
+                        0.7f to scheme.primaryContainer.copy(alpha = 0.08f),
                         1f to scheme.background,
                     )
                 ),
         )
-        Box(
-            Modifier
-                .align(Alignment.TopEnd)
-                .offset(x = 28.dp, y = (-44).dp)
-                .size(148.dp)
-                .graphicsLayer { rotationZ = 18f; alpha = 0.55f * accent }
-                .clip(flower)
-                .background(scheme.primary.copy(alpha = 0.18f)),
-        )
-        Box(
-            Modifier
-                .align(Alignment.TopStart)
-                .offset(x = (-54).dp, y = (-42).dp)
-                .size(112.dp)
-                .graphicsLayer { rotationZ = -12f; alpha = 0.45f * accent }
-                .clip(cookie)
-                .background(scheme.tertiary.copy(alpha = 0.16f)),
-        )
+        // декор живёт в matchParentSize-слое: он не растягивает шапку и не лезет в сетку
+        Box(Modifier.matchParentSize()) {
+            Box(
+                Modifier
+                    .align(Alignment.TopStart)
+                    .offset(x = (-56).dp, y = (-48).dp)
+                    .size(136.dp)
+                    .graphicsLayer { rotationZ = 18f; alpha = 0.5f * accent }
+                    .clip(flower)
+                    .background(scheme.primary.copy(alpha = 0.14f)),
+            )
+            Box(
+                Modifier
+                    .align(Alignment.BottomEnd)
+                    .offset(x = 44.dp, y = 34.dp)
+                    .size(96.dp)
+                    .graphicsLayer { rotationZ = -14f; alpha = 0.35f * accent }
+                    .clip(cookie)
+                    .background(scheme.tertiary.copy(alpha = 0.10f)),
+            )
+        }
 
         Column(Modifier.fillMaxWidth().padding(start = 20.dp, end = 12.dp, top = 6.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
