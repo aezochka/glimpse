@@ -875,19 +875,27 @@ fun PhotoCell(
     }
 }
 
+/**
+ * Кэш превью видео: без него каждая пересозданная плитка заново дёргала
+ * ContentResolver и декодировала кадр — прокрутка сетки с видео заметно дёргалась.
+ */
+private val videoThumbs = object : android.util.LruCache<String, Bitmap>(32) {}
+
 @Composable
 fun rememberVideoThumb(item: MediaItem): androidx.compose.runtime.State<Bitmap?> {
     val context = LocalContext.current
-    return androidx.compose.runtime.produceState<Bitmap?>(initialValue = null, item.uri) {
-        value = withContext(Dispatchers.IO) {
+    val key = item.uri.toString()
+    return androidx.compose.runtime.produceState<Bitmap?>(initialValue = videoThumbs.get(key), key) {
+        if (value != null) return@produceState
+        val thumb = withContext(Dispatchers.IO) {
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-                try {
-                    context.contentResolver.loadThumbnail(item.uri, Size(256, 256), null)
-                } catch (e: Exception) {
-                    null
-                }
+                runCatching {
+                    context.contentResolver.loadThumbnail(item.uri, Size(192, 192), null)
+                }.getOrNull()
             } else null
         }
+        thumb?.let { videoThumbs.put(key, it) }
+        value = thumb
     }
 }
 
