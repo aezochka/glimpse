@@ -174,6 +174,21 @@ class SwipeCrashTest {
             compose.onNodeWithTag("viewerPager").performTouchInput { swipeLeft() }
             shot("05_viewer_next")
         }
+        // редактор: открыть из вьювера, снять базовый вид и две панели
+        runCatching {
+            compose.onAllNodesWithContentDescription("Изменить").onFirst().performClick()
+            compose.waitForIdle()
+            Thread.sleep(3000) // декод битмапа + вход
+            shot("06_editor")
+            compose.onAllNodesWithContentDescription("Тон").onFirst().performClick()
+            compose.waitForIdle()
+            Thread.sleep(1000)
+            shot("07_editor_tone")
+            compose.onAllNodesWithContentDescription("Фильтры").onFirst().performClick()
+            compose.waitForIdle()
+            Thread.sleep(1000)
+            shot("08_editor_filters")
+        }
     }
 
     @Test
