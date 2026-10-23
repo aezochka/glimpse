@@ -106,6 +106,7 @@ import dev.aezochka.glimpse.CrashLog
 import dev.aezochka.glimpse.GalleryViewModel
 import dev.aezochka.glimpse.MediaItem
 import dev.aezochka.m3e.M3ESegmentedButtonRow
+import dev.aezochka.m3e.m3ePopIn
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -120,6 +121,9 @@ data class PickConfig(
 )
 
 data class Album(val name: String, val items: List<MediaItem>)
+
+/** Состояние нижнего бара — переключается анимированно. */
+private enum class BarMode { TABS, SELECT, PICK, ALBUM }
 
 sealed interface Screen {
     data object Gallery : Screen
@@ -152,8 +156,12 @@ fun GalleryRoot(vm: GalleryViewModel = viewModel(factory = GalleryViewModel.Fact
             label = "screens",
             transitionSpec = {
                 val dir = if (targetState.depth() >= initialState.depth()) 1 else -1
-                (slideInHorizontally(Motion.spatial()) { dir * it / 3 } + fadeIn(Motion.spatial())) togetherWith
-                    (slideOutHorizontally(Motion.spatial()) { -dir * it / 3 } + fadeOut(Motion.effects()))
+                // большие поверхности едут tween'ом: спринг на них даёт рывок в конце
+                (slideInHorizontally(Motion.screenIn()) { dir * it / 4 } +
+                    fadeIn(Motion.screenIn()) +
+                    scaleIn(Motion.screenIn(), initialScale = 0.98f)) togetherWith
+                    (slideOutHorizontally(Motion.screenOut()) { -dir * it / 6 } +
+                        fadeOut(Motion.screenOut()))
             },
         ) { s ->
             when (s) {
@@ -382,7 +390,9 @@ fun GalleryScreen(
     // общий grid-state: скролл НЕ сбрасывается при входе/выходе из выбора
     val gridState = androidx.compose.foundation.lazy.grid.rememberLazyGridState()
     // вкладки листаются свайпом
-    val tabPager = androidx.compose.foundation.pager.rememberPagerState(pageCount = { 2 })
+    val tabPager = androidx.compose.foundation.pager.rememberPagerState(
+    pageCount = { if (openAlbum != null || pickMode) 1 else 2 },
+)
 
     Scaffold(containerColor = MaterialTheme.colorScheme.background) { pad ->
         Box(Modifier.fillMaxSize().padding(pad)) {
@@ -419,7 +429,7 @@ fun GalleryScreen(
                     )
                 }
 
-                // ---- контент: вкладки листаются свайпом (пейджер) ----
+                // ---- контент: одна сетка на все режимы, вкладки листаются свайпом ----
                 Box(Modifier.weight(1f)) {
                     when {
                         media.isEmpty() -> EmptyState("Пока пусто")
@@ -431,28 +441,17 @@ fun GalleryScreen(
                                 else -> "Пока пусто"
                             },
                         )
-                        openAlbum != null || pickMode || selectionMode -> PhotosGrid(
-                            items = items,
-                            pickConfig = pickConfig,
-                            selectionMode = selectionMode,
-                            selected = selected,
-                            gridState = gridState,
-                            onToggle = ::toggle,
-                            onOpen = onOpen,
-                            onEnterSelection = { item ->
-                                selectionMode = true
-                                selected[item.stableKey()] = true
-                            },
-                        )
                         else -> androidx.compose.foundation.pager.HorizontalPager(
                             state = tabPager,
                             modifier = Modifier.fillMaxSize().testTag("galleryPager"),
                         ) { page ->
                             if (page == 0) {
+                                // одна и та же сетка во всех режимах: вход/выход из выбора
+                                // больше не пересоздаёт список (раньше был заметный прыжок)
                                 PhotosGrid(
                                     items = items,
-                                    pickConfig = null,
-                                    selectionMode = false,
+                                    pickConfig = pickConfig,
+                                    selectionMode = selectionMode,
                                     selected = selected,
                                     gridState = gridState,
                                     onToggle = ::toggle,
@@ -470,9 +469,28 @@ fun GalleryScreen(
                 }
             }
 
-            // ---- нижние оверлеи (плавают поверх контента) ----
-            when {
-                pickMode -> PickBar(
+            // ---- нижние оверлеи: смена состояния бара анимируется ----
+            val barMode = when {
+                pickMode -> BarMode.PICK
+                selectionMode -> BarMode.SELECT
+                openAlbum != null -> BarMode.ALBUM
+                else -> BarMode.TABS
+            }
+            AnimatedContent(
+                targetState = barMode,
+                label = "bar",
+                modifier = Modifier.align(Alignment.BottomCenter),
+                transitionSpec = {
+                    (fadeIn(Motion.screenIn()) + slideInVertically(Motion.screenIn()) { it / 2 }) togetherWith
+                        (fadeOut(Motion.screenOut()) + slideOutVertically(Motion.screenOut()) { it / 3 })
+                },
+            ) { bar ->
+                Box(
+                    Modifier.fillMaxWidth(),
+                    contentAlignment = if (bar == BarMode.ALBUM) Alignment.BottomStart else Alignment.BottomCenter,
+                ) {
+                    when (bar) {
+                BarMode.PICK -> PickBar(
                     count = selectedCount,
                     allowMultiple = pickConfig!!.allowMultiple,
                     onConfirm = {
@@ -480,29 +498,28 @@ fun GalleryScreen(
                         pickConfig.onDone(sel)
                     },
                     onClear = { selected.clear() },
-                    modifier = Modifier.align(Alignment.BottomCenter),
+                    modifier = Modifier,
                 )
-                selectionMode -> SelectBar(
-                    count = selectedCount,
-                    onShare = ::shareSelected,
-                    onDelete = ::deleteSelected,
-                    modifier = Modifier.align(Alignment.BottomCenter),
-                )
-                openAlbum != null -> BackAlbumBar(
-                    onBack = { openAlbum = null },
-                    modifier = Modifier.align(Alignment.BottomStart),
-                )
-                else -> TabsBar(
-                    tab = tabPager.settledPage,
-                    onSelect = { t ->
-                        scope.launch {
-                            // тап по активной вкладке — наверх (привычка из Photos)
-                            if (t == tabPager.settledPage) gridState.animateScrollToItem(0)
-                            else tabPager.animateScrollToPage(t)
-                        }
-                    },
-                    modifier = Modifier.align(Alignment.BottomCenter),
-                )
+                        BarMode.SELECT -> SelectBar(
+                            count = selectedCount,
+                            onShare = ::shareSelected,
+                            onDelete = ::deleteSelected,
+                            modifier = Modifier,
+                        )
+                        BarMode.ALBUM -> BackAlbumBar(onBack = { openAlbum = null }, modifier = Modifier)
+                        BarMode.TABS -> TabsBar(
+                            tab = tabPager.settledPage,
+                            onSelect = { t ->
+                                scope.launch {
+                                    // тап по активной вкладке — наверх (привычка из Photos)
+                                    if (t == tabPager.settledPage) gridState.animateScrollToItem(0)
+                                    else tabPager.animateScrollToPage(t)
+                                }
+                            },
+                            modifier = Modifier,
+                        )
+                    }
+                }
             }
         }
     }
@@ -641,6 +658,14 @@ private fun PhotosGrid(
     val indexByKey = remember(items) {
         items.withIndex().associate { (i, m) -> m.stableKey() to i }
     }
+    // входная волна плиток играет один раз: после 700мс модификатор снимается,
+    // иначе он повторяется при каждом возврате к сетке и выглядит как дёрганье
+    var armed by remember { mutableStateOf(true) }
+    LaunchedEffect(items) {
+        armed = true
+        kotlinx.coroutines.delay(700)
+        armed = false
+    }
     LazyVerticalGrid(
         state = gridState,
         columns = GridCells.Adaptive(104.dp),
@@ -651,7 +676,7 @@ private fun PhotosGrid(
             item(key = "h$day", span = { GridItemSpan(maxLineSpan) }) {
                 DayHeader(dayLabel(day), sectionItems.size)
             }
-            itemsIndexed(sectionItems, key = { _, it -> it.stableKey() }) { _, item ->
+            itemsIndexed(sectionItems, key = { _, it -> it.stableKey() }) { sectionIndex, item ->
                 val isSel = (pickConfig != null || selectionMode) && selected[item.stableKey()] == true
                 PhotoCell(
                     item = item,
@@ -670,7 +695,11 @@ private fun PhotosGrid(
                     onLongClick = {
                         if (pickConfig == null) onEnterSelection(item)
                     },
-                    modifier = Modifier.animateItem(),
+                    modifier = Modifier
+                        .animateItem()
+                        .then(
+                            if (armed) Modifier.m3ePopIn(index = sectionIndex.coerceAtMost(8)) else Modifier
+                        ),
                 )
             }
         }

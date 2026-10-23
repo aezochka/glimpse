@@ -5,6 +5,7 @@ import androidx.activity.compose.BackHandler
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.LinearEasing
+import androidx.compose.animation.core.animate
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
@@ -35,6 +36,8 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.pager.HorizontalPager
+import androidx.compose.foundation.pager.PagerDefaults
+import androidx.compose.foundation.pager.PagerSnapDistance
 import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
@@ -58,6 +61,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -84,6 +88,7 @@ import coil.compose.AsyncImage
 import dev.aezochka.glimpse.MediaItem
 import dev.aezochka.glimpse.R
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
 import kotlin.math.absoluteValue
 
 /**
@@ -104,6 +109,11 @@ fun ViewerScreen(
     val context = LocalContext.current
     val safeIndex = startIndex.coerceIn(0, (items.size - 1).coerceAtLeast(0))
     val pagerState = rememberPagerState(initialPage = safeIndex, pageCount = { items.size })
+    // свайп доводится пружиной ровно на одну страницу — без «пролётов» и рывков
+    val fling = PagerDefaults.flingBehavior(
+        state = pagerState,
+        pagerSnapDistance = PagerSnapDistance.atMost(1),
+    )
     var chrome by remember { mutableStateOf(true) }
     BackHandler(onBack = onBack)
 
@@ -112,6 +122,7 @@ fun ViewerScreen(
     Box(Modifier.fillMaxSize().background(Color.Black)) {
         HorizontalPager(
             state = pagerState,
+            flingBehavior = fling,
             beyondViewportPageCount = 1,
             modifier = Modifier.fillMaxSize().testTag("viewerPager"),
         ) { page ->
@@ -184,7 +195,14 @@ fun ViewerScreen(
                     }
                 }
                 if (items.size > 1) {
-                    CounterPill(pagerState.currentPage, items.size)
+                    AnimatedContent(
+                        targetState = pagerState.currentPage,
+                        label = "counter",
+                        transitionSpec = {
+                            (fadeIn(Motion.screenIn()) + slideInVertically(Motion.screenIn()) { it / 2 }) togetherWith
+                                fadeOut(Motion.screenOut())
+                        },
+                    ) { page -> CounterPill(page, items.size) }
                 }
             }
         }
@@ -315,6 +333,7 @@ private fun shareItem(context: android.content.Context, item: MediaItem) {
  */
 @Composable
 private fun ZoomPage(item: MediaItem, onTap: () -> Unit) {
+    val scope = rememberCoroutineScope()
     var scale by remember { mutableStateOf(1f) }
     var offset by remember { mutableStateOf(Offset.Zero) }
     var box by remember { mutableStateOf(IntSize.Zero) }
@@ -344,11 +363,16 @@ private fun ZoomPage(item: MediaItem, onTap: () -> Unit) {
                 detectTapGestures(
                     onTap = { onTap() },
                     onDoubleTap = {
-                        if (scale > 1f) {
-                            scale = 1f
-                            offset = Offset.Zero
-                        } else {
-                            scale = 2.6f
+                        val target = if (scale > 1f) 1f else 2.6f
+                        scope.launch {
+                            animate(
+                                initialValue = scale,
+                                targetValue = target,
+                                animationSpec = Motion.glide(),
+                            ) { v, _ ->
+                                scale = v
+                                if (v <= 1.02f) offset = Offset.Zero
+                            }
                         }
                     },
                 )

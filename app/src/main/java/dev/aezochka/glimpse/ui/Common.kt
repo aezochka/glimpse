@@ -2,7 +2,10 @@ package dev.aezochka.glimpse.ui
 
 import android.Manifest
 import android.os.Build
+import androidx.compose.animation.core.CubicBezierEasing
 import androidx.compose.animation.core.FiniteAnimationSpec
+import androidx.compose.animation.core.spring
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -34,6 +37,21 @@ object Motion {
     fun <T> spatialFast(): FiniteAnimationSpec<T> = M3EMotion.spatialFast()
 
     fun <T> effects(): FiniteAnimationSpec<T> = M3EMotion.effects()
+
+    /**
+     * Большие поверхности — экраны, шторки, панели: плавный tween вместо спринга.
+     * Спринг на полноэкранном слайде читается как «дёргано»: у него нет овершута
+     * на дистанции в 300dp, но есть рывок в конце.
+     */
+    fun <T> screenIn(): FiniteAnimationSpec<T> =
+        tween(360, easing = CubicBezierEasing(0.2f, 0f, 0f, 1f))
+
+    fun <T> screenOut(): FiniteAnimationSpec<T> =
+        tween(240, easing = CubicBezierEasing(0.3f, 0f, 1f, 1f))
+
+    /** Почти без отскока: съезды панелей, масштаб плиток, «доезд» содержимого. */
+    fun <T> glide(): FiniteAnimationSpec<T> =
+        spring(dampingRatio = 0.94f, stiffness = 260f)
 }
 
 /** Уникальный ключ элемента: id фото и видео могут совпадать! */
