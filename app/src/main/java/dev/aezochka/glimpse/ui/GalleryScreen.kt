@@ -176,10 +176,11 @@ fun GalleryRoot(vm: GalleryViewModel = viewModel(factory = GalleryViewModel.Fact
             }
         }
 
-        if (crashFile != null && screen == Screen.Gallery) {
+        val pendingCrash = crashFile
+        if (pendingCrash != null && screen == Screen.Gallery) {
             CrashBar(
                 onCopy = {
-                    CrashLog.copy(context, CrashLog.text(crashFile!!))
+                    CrashLog.copy(context, CrashLog.text(pendingCrash))
                     CrashLog.clear(context)
                     crashFile = null
                 },

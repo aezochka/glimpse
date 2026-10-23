@@ -150,25 +150,27 @@ class SwipeCrashTest {
     @Test
     fun screenshots() {
         waitCells()
-        shot("01_gallery")
-        compose.onNodeWithTag("galleryPager").performTouchInput { swipeLeft() }
-        shot("02_albums")
-        compose.onNodeWithTag("galleryPager").performTouchInput { swipeRight() }
-        compose.waitForIdle()
-        // долгое нажатие → режим выбора
-        compose.onAllNodesWithTag("cell").onFirst().performTouchInput { longClick() }
-        shot("03_selection")
-        compose.onAllNodesWithContentDescription("Выйти из выбора").onFirst().performClick()
-        compose.waitForIdle()
-        // вьювер: фото, затем следующая страница
+        // сначала вьювер: его скриншоты сами попадают в MediaStore и портят следующие кадры
         compose.onAllNodesWithTag("cell").onFirst().performClick()
         compose.waitForIdle()
         Thread.sleep(2000) // переход экранов (спринг) должен успеть завершиться
         compose.waitForIdle()
         runCatching { compose.onRoot(useUnmergedTree = true).printToLog("GlimpseTree") }
-        shot("04_viewer")
+        shot("01_viewer")
         compose.onNodeWithTag("viewerPager").performTouchInput { swipeLeft() }
-        shot("05_viewer_next")
+        shot("02_viewer_next")
+
+        compose.onAllNodesWithContentDescription("Назад").onFirst().performClick()
+        compose.waitForIdle()
+        Thread.sleep(1200)
+        shot("03_gallery")
+        compose.onNodeWithTag("galleryPager").performTouchInput { swipeLeft() }
+        shot("04_albums")
+        compose.onNodeWithTag("galleryPager").performTouchInput { swipeRight() }
+        compose.waitForIdle()
+        // долгое нажатие → режим выбора
+        compose.onAllNodesWithTag("cell").onFirst().performTouchInput { longClick() }
+        shot("05_selection")
     }
 
     @Test
