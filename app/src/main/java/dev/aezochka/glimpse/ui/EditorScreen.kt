@@ -457,19 +457,19 @@ private fun EditorToolbar(
     onRotate: () -> Unit,
     onFlip: () -> Unit,
 ) {
-    val scheme = MaterialTheme.colorScheme
     val pill = MaterialShapes.Pill.toShape()
     Row(
         Modifier
             .fillMaxWidth()
             .navigationBarsPadding()
-            .padding(horizontal = 10.dp, vertical = 10.dp),
+            .padding(horizontal = 8.dp, vertical = 12.dp),
         horizontalArrangement = Arrangement.Center,
     ) {
         Row(
             Modifier
                 .clip(pill)
-                .background(scheme.surfaceContainerHigh.copy(alpha = 0.96f))
+                .background(Color.White.copy(alpha = 0.10f))
+                .border(1.dp, Color.White.copy(alpha = 0.14f), pill)
                 .padding(4.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
@@ -500,7 +500,7 @@ private fun ToolButton(
         if (active) scheme.primary else Color.Transparent, Motion.effects(), label = "toolBg",
     )
     val tint by animateColorAsState(
-        if (active) scheme.onPrimary else scheme.onSurfaceVariant, Motion.effects(), label = "toolTint",
+        if (active) scheme.onPrimary else Color.White.copy(alpha = 0.82f), Motion.effects(), label = "toolTint",
     )
     Column(
         horizontalAlignment = Alignment.CenterHorizontally,
@@ -542,7 +542,7 @@ private fun EditorPanel(
         null -> 0.dp
         EditPanel.CROP -> 76.dp
         EditPanel.FILTERS -> 136.dp
-        EditPanel.ADJUST -> 172.dp
+        EditPanel.ADJUST -> 168.dp
     }
     val height by animateDpAsState(target, Motion.glide(), label = "panelH")
     Box(
@@ -634,8 +634,8 @@ private fun FilterRow(preview: Bitmap?, selected: FilterPreset, onPick: (FilterP
                 Text(
                     preset.label,
                     style = MaterialTheme.typography.labelSmall,
-                    color = if (active) MaterialTheme.colorScheme.primary
-                    else MaterialTheme.colorScheme.onSurfaceVariant,
+                    color = if (active) MaterialTheme.colorScheme.primaryContainer
+                    else Color.White.copy(alpha = 0.75f),
                     modifier = Modifier.padding(top = 6.dp),
                 )
             }
@@ -655,7 +655,7 @@ private fun AdjustPanel(
                 "Тон",
                 style = MaterialTheme.typography.labelLarge,
                 fontWeight = FontWeight.SemiBold,
-                color = MaterialTheme.colorScheme.onSurface,
+                color = Color.White,
             )
             Spacer(Modifier.weight(1f))
             if (edits.adjusted) {
@@ -663,7 +663,7 @@ private fun AdjustPanel(
                     onClick = onReset,
                     contentPadding = PaddingValues(horizontal = 8.dp, vertical = 0.dp),
                 ) {
-                    Text("Сбросить", style = MaterialTheme.typography.labelMedium)
+                    Text("Сбросить", style = MaterialTheme.typography.labelMedium, color = Color.White.copy(alpha = 0.85f))
                 }
             }
         }
@@ -673,7 +673,7 @@ private fun AdjustPanel(
         AdjustSlider("Контраст", edits.contrast, 0.5f..1.5f) {
             onLive(edits.copy(contrast = it))
         }
-        AdjustSlider("Насыщенность", edits.saturation, 0f..2f) {
+        AdjustSlider("Цвет", edits.saturation, 0f..2f) {
             onLive(edits.copy(saturation = it))
         }
     }
@@ -693,8 +693,9 @@ private fun AdjustSlider(
         Text(
             label,
             style = MaterialTheme.typography.labelMedium,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-            modifier = Modifier.width(92.dp),
+            color = Color.White.copy(alpha = 0.72f),
+            maxLines = 1,
+            modifier = Modifier.width(86.dp),
         )
         M3ESlider(
             value = value,
