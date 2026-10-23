@@ -18,9 +18,11 @@ import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
 import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.expandHorizontally
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.scaleIn
+import androidx.compose.animation.shrinkHorizontally
 import androidx.compose.animation.slideInVertically
 import androidx.compose.animation.slideOutVertically
 import androidx.compose.animation.slideInHorizontally
@@ -454,6 +456,11 @@ fun GalleryScreen(
                         )
                         else -> androidx.compose.foundation.pager.HorizontalPager(
                             state = tabPager,
+                            // вкладка доводится ровно на одну страницу, без «пролёта» и рывка
+                            flingBehavior = androidx.compose.foundation.pager.PagerDefaults.flingBehavior(
+                                state = tabPager,
+                                pagerSnapDistance = androidx.compose.foundation.pager.PagerSnapDistance.atMost(1),
+                            ),
                             modifier = Modifier.fillMaxSize().testTag("galleryPager"),
                         ) { page ->
                             if (page == 0) {
@@ -1002,7 +1009,11 @@ fun TabPill(active: Boolean, icon: ImageVector, label: String, onClick: () -> Un
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Icon(icon, label, tint = content, modifier = Modifier.size(22.dp))
-        AnimatedVisibility(visible = active) {
+        AnimatedVisibility(
+            visible = active,
+            enter = fadeIn(Motion.effects()) + expandHorizontally(Motion.screenIn()),
+            exit = fadeOut(Motion.effects()) + shrinkHorizontally(Motion.screenOut()),
+        ) {
             Text(
                 label,
                 style = MaterialTheme.typography.labelLarge,
