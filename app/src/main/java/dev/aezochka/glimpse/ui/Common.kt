@@ -17,6 +17,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import dev.aezochka.glimpse.MediaItem
 import dev.aezochka.m3e.M3EMotion
@@ -39,8 +40,24 @@ object Motion {
 fun MediaItem.stableKey(): String = (if (isVideo) "v" else "i") + id
 
 /** Плитка: пружинный спад + морф угла — из m3e-compose. */
-fun Modifier.cellPress(onClick: () -> Unit, onLongClick: (() -> Unit)? = null): Modifier =
-    m3ePress(onClick = onClick, onLongClick = onLongClick)
+fun Modifier.cellPress(
+    onClick: () -> Unit,
+    onLongClick: (() -> Unit)? = null,
+    corner: Dp = 10.dp,
+    cornerPressed: Dp = 26.dp,
+): Modifier = m3ePress(
+    onClick = onClick,
+    onLongClick = onLongClick,
+    corner = corner,
+    cornerPressed = cornerPressed,
+)
+
+/**
+ * Угол из пружинной анимации: спринг с овершутом уходит в минус, а
+ * RoundedCornerShape(negative) кидает IllegalArgumentException («Corner size in Px
+ * can't be negative») — это и был краш при свайпе вкладок.
+ */
+fun Dp.safeCorner(): Dp = coerceIn(0.dp, 2000.dp)
 
 /** Пилюля/кнопка: пружинный спад — из m3e-compose. */
 fun Modifier.pillPress(onClick: () -> Unit): Modifier =
@@ -126,6 +143,9 @@ fun durationLabel(ms: Long): String {
     val s = total % 60
     return if (h > 0) "%d:%02d:%02d".format(h, m, s) else "%d:%02d".format(m, s)
 }
+
+/** 12 345 вместо 12,345 — тонкие пробелы в счётчиках шапки. */
+fun formatCount(n: Int): String = "%,d".format(n).replace(',', '\u00A0')
 
 internal fun hasMediaAccess(
     sdkInt: Int,

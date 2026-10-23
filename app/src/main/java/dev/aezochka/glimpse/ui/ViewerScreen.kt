@@ -4,7 +4,6 @@ import android.content.Intent
 import androidx.activity.compose.BackHandler
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.AnimatedVisibility
-import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
 import androidx.compose.animation.core.LinearEasing
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
@@ -16,31 +15,36 @@ import androidx.compose.animation.slideInVertically
 import androidx.compose.animation.slideOutVertically
 import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.gestures.awaitEachGesture
 import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.foundation.gestures.calculatePan
 import androidx.compose.foundation.gestures.calculateZoom
 import androidx.compose.foundation.gestures.detectTapGestures
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.pager.HorizontalPager
 import androidx.compose.foundation.pager.rememberPagerState
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.ArrowBack
 import androidx.compose.material.icons.rounded.Edit
 import androidx.compose.material.icons.rounded.Pause
 import androidx.compose.material.icons.rounded.PlayArrow
 import androidx.compose.material.icons.rounded.Share
+import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
 import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialShapes
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Slider
@@ -58,24 +62,37 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.media3.common.Player
 import androidx.media3.exoplayer.ExoPlayer
-import androidx.media3.ui.AspectRatioFrameLayout
 import androidx.media3.ui.PlayerView
 import coil.compose.AsyncImage
 import dev.aezochka.glimpse.MediaItem
+import dev.aezochka.glimpse.R
 import kotlinx.coroutines.delay
+import kotlin.math.absoluteValue
 
+/**
+ * Полноэкранный вьювер: свайп между элементами, зум фото, свои M3E-контролы видео.
+ *
+ * Плеер создаётся ТОЛЬКО у активной страницы: при быстром свайпе ExoPlayer
+ * с декодером на каждой предзагруженной странице выжирал память и кодеки —
+ * второй источник «краша при свапе».
+ */
+@OptIn(ExperimentalMaterial3ExpressiveApi::class)
 @Composable
 fun ViewerScreen(
     items: List<MediaItem>,
@@ -98,20 +115,34 @@ fun ViewerScreen(
             modifier = Modifier.fillMaxSize().testTag("viewerPager"),
         ) { page ->
             val item = items.getOrNull(page)
-            if (item == null) {
-                Box(Modifier.fillMaxSize())
-            } else if (item.isVideo) {
-                VideoPage(
-                    item = item,
-                    active = page == pagerState.currentPage,
-                    onTap = { chrome = !chrome },
-                    chrome = chrome,
-                )
-            } else {
-                ZoomPage(item, onTap = { chrome = !chrome })
+            Box(
+                Modifier
+                    .fillMaxSize()
+                    .graphicsLayer {
+                        // «карусельный» переход: соседняя страница гаснет и чуть мельче
+                        val dist = ((pagerState.currentPage - page) + pagerState.currentPageOffsetFraction)
+                            .absoluteValue.coerceIn(0f, 1f)
+                        val vis = 1f - dist
+                        alpha = 0.35f + 0.65f * vis
+                        val s = 0.94f + 0.06f * vis
+                        scaleX = s
+                        scaleY = s
+                    },
+            ) {
+                when {
+                    item == null -> Box(Modifier.fillMaxSize())
+                    item.isVideo -> VideoPage(
+                        item = item,
+                        active = page == pagerState.currentPage,
+                        onTap = { chrome = !chrome },
+                        chrome = chrome,
+                    )
+                    else -> ZoomPage(item, onTap = { chrome = !chrome })
+                }
             }
         }
 
+        // ---- верх: скрим + название + счётчик ----
         AnimatedVisibility(
             visible = chrome,
             modifier = Modifier.align(Alignment.TopCenter),
@@ -121,51 +152,72 @@ fun ViewerScreen(
             Row(
                 Modifier
                     .fillMaxWidth()
-                    .background(Color.Black.copy(alpha = 0.45f))
+                    .background(
+                        Brush.verticalGradient(
+                            0f to Color.Black.copy(alpha = 0.80f),
+                            1f to Color.Transparent,
+                        )
+                    )
                     .statusBarsPadding()
-                    .padding(horizontal = 4.dp, vertical = 4.dp),
+                    .padding(start = 8.dp, end = 16.dp, top = 6.dp, bottom = 22.dp),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
-                IconButton(onClick = onBack) {
-                    Icon(Icons.AutoMirrored.Rounded.ArrowBack, "Назад", tint = Color.White)
-                }
-                Column(Modifier.weight(1f)) {
+                GlassIconButton(Icons.AutoMirrored.Rounded.ArrowBack, "Назад", onBack)
+                Column(Modifier.weight(1f).padding(start = 10.dp)) {
                     Text(
                         current?.name ?: "",
                         color = Color.White,
-                        style = MaterialTheme.typography.bodyLarge,
+                        style = MaterialTheme.typography.bodyMedium,
+                        fontWeight = FontWeight.Medium,
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis,
                     )
                     if (current != null) {
                         Text(
                             formatDateTime(current.date),
-                            color = Color.White.copy(alpha = 0.7f),
+                            color = Color.White.copy(alpha = 0.6f),
                             style = MaterialTheme.typography.labelSmall,
                         )
                     }
                 }
-                Spacer(Modifier.width(12.dp))
+                if (items.size > 1) {
+                    CounterPill(pagerState.currentPage, items.size)
+                }
             }
         }
 
+        // ---- низ: плавающая стеклянная пилюля действий ----
         AnimatedVisibility(
-            visible = chrome,
+            visible = chrome && current != null,
             modifier = Modifier.align(Alignment.BottomCenter),
             enter = fadeIn() + slideInVertically { it },
             exit = fadeOut() + slideOutVertically { it },
         ) {
-            Row(
+            Box(
                 Modifier
                     .fillMaxWidth()
-                    .background(Color.Black.copy(alpha = 0.45f))
-                    .padding(vertical = 6.dp, horizontal = 8.dp),
-                horizontalArrangement = androidx.compose.foundation.layout.Arrangement.SpaceEvenly,
+                    .background(
+                        Brush.verticalGradient(
+                            0f to Color.Transparent,
+                            1f to Color.Black.copy(alpha = 0.72f),
+                        )
+                    )
+                    .navigationBarsPadding()
+                    .padding(top = 34.dp, bottom = 20.dp),
+                contentAlignment = Alignment.Center,
             ) {
-                if (current != null) {
-                    ActionChip("Поделиться", Icons.Rounded.Share) { shareItem(context, current) }
-                    if (!current.isVideo) {
-                        ActionChip("Изменить", Icons.Rounded.Edit) { onEdit(current) }
+                Row(
+                    Modifier
+                        .glassPill()
+                        .padding(6.dp),
+                    horizontalArrangement = Arrangement.spacedBy(2.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    GlassAction("Поделиться", Icons.Rounded.Share) {
+                        current?.let { shareItem(context, it) }
+                    }
+                    if (current != null && !current.isVideo) {
+                        GlassAction("Изменить", Icons.Rounded.Edit) { onEdit(current) }
                     }
                 }
             }
@@ -173,17 +225,64 @@ fun ViewerScreen(
     }
 }
 
+// =====================================================================
+// Стеклянные элементы хрома
+// =====================================================================
+
+@OptIn(ExperimentalMaterial3ExpressiveApi::class)
 @Composable
-private fun ActionChip(label: String, icon: ImageVector, onClick: () -> Unit) {
+private fun Modifier.glassPill(): Modifier {
+    val pill = MaterialShapes.Pill.toShape()
+    return this
+        .clip(pill)
+        .background(Color.White.copy(alpha = 0.13f))
+        .border(1.dp, Color.White.copy(alpha = 0.16f), pill)
+}
+
+@Composable
+private fun GlassIconButton(icon: ImageVector, description: String, onClick: () -> Unit) {
+    Box(
+        Modifier
+            .size(40.dp)
+            .clip(CircleShape)
+            .background(Color.White.copy(alpha = 0.13f))
+            .pillPress(onClick),
+        contentAlignment = Alignment.Center,
+    ) {
+        Icon(icon, description, tint = Color.White, modifier = Modifier.size(20.dp))
+    }
+}
+
+@OptIn(ExperimentalMaterial3ExpressiveApi::class)
+@Composable
+private fun GlassAction(label: String, icon: ImageVector, onClick: () -> Unit) {
     Row(
         Modifier
             .pillPress(onClick)
-            .padding(horizontal = 18.dp, vertical = 12.dp),
+            .clip(MaterialShapes.Pill.toShape())
+            .padding(horizontal = 16.dp, vertical = 11.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        Icon(icon, label, tint = Color.White)
-        Spacer(Modifier.padding(end = 8.dp))
+        Icon(icon, label, tint = Color.White, modifier = Modifier.size(20.dp))
+        Spacer(Modifier.width(8.dp))
         Text(label, color = Color.White, style = MaterialTheme.typography.labelLarge)
+    }
+}
+
+@OptIn(ExperimentalMaterial3ExpressiveApi::class)
+@Composable
+private fun CounterPill(page: Int, total: Int) {
+    Box(
+        Modifier
+            .clip(MaterialShapes.Pill.toShape())
+            .background(Color.White.copy(alpha = 0.14f))
+            .padding(horizontal = 12.dp, vertical = 6.dp),
+    ) {
+        Text(
+            "${page + 1} / $total",
+            color = Color.White,
+            style = MaterialTheme.typography.labelMedium,
+        )
     }
 }
 
@@ -196,6 +295,10 @@ private fun shareItem(context: android.content.Context, item: MediaItem) {
     context.startActivity(Intent.createChooser(send, null))
 }
 
+// =====================================================================
+// Фото: пинч-зум, двойной тап, панорамирование с ограничением краёв
+// =====================================================================
+
 /**
  * Страница-фото: пинч-зум, двойной тап, панорамирование.
  * ВАЖНО: при scale == 1 жесты НЕ потребляются — иначе пейджер не листается.
@@ -204,9 +307,11 @@ private fun shareItem(context: android.content.Context, item: MediaItem) {
 private fun ZoomPage(item: MediaItem, onTap: () -> Unit) {
     var scale by remember { mutableStateOf(1f) }
     var offset by remember { mutableStateOf(Offset.Zero) }
+    var box by remember { mutableStateOf(IntSize.Zero) }
     Box(
         Modifier
             .fillMaxSize()
+            .onSizeChanged { box = it }
             .pointerInput(Unit) {
                 awaitEachGesture {
                     awaitFirstDown(requireUnconsumed = false)
@@ -216,10 +321,10 @@ private fun ZoomPage(item: MediaItem, onTap: () -> Unit) {
                         val pan = event.calculatePan()
                         if (zoom != 1f) {
                             scale = (scale * zoom).coerceIn(1f, 6f)
-                            if (scale <= 1f) offset = Offset.Zero
+                            offset = if (scale <= 1f) Offset.Zero else clampOffset(offset, scale, box)
                             event.changes.forEach { it.consume() }
                         } else if (scale > 1f) {
-                            offset += pan
+                            offset = clampOffset(offset + pan, scale, box)
                             event.changes.forEach { it.consume() }
                         }
                     } while (event.changes.any { it.pressed })
@@ -256,52 +361,71 @@ private fun ZoomPage(item: MediaItem, onTap: () -> Unit) {
     }
 }
 
+/** Не даём утащить увеличенное фото за края экрана. */
+private fun clampOffset(offset: Offset, scale: Float, size: IntSize): Offset {
+    if (size.width == 0 || size.height == 0) return offset
+    val maxX = size.width * (scale - 1f) / 2f
+    val maxY = size.height * (scale - 1f) / 2f
+    return Offset(offset.x.coerceIn(-maxX, maxX), offset.y.coerceIn(-maxY, maxY))
+}
+
+// =====================================================================
+// Видео: плеер со СВОИМИ M3E-контролами
+// =====================================================================
+
 /**
- * Страница-видео: плеер со СВОИМИ M3E-контролами
- * (cookie-кнопка play/pause, тонкий белый слайдер).
+ * Страница-видео: плеер создаётся при первом показе страницы и живёт до её
+ * уничтожения. Экран — TextureView (res/layout/view_player.xml), чтобы альфа и
+ * масштаб карусельного перехода применялись и к видео.
  */
 @OptIn(ExperimentalMaterial3ExpressiveApi::class)
 @Composable
 private fun VideoPage(item: MediaItem, active: Boolean, onTap: () -> Unit, chrome: Boolean) {
     val context = LocalContext.current
-    val player = remember {
-        ExoPlayer.Builder(context).build().apply {
-            setMediaItem(androidx.media3.common.MediaItem.fromUri(item.uri))
-            prepare()
-            playWhenReady = active
-        }
-    }
-    LaunchedEffect(active) {
-        if (active) player.play() else player.pause()
-    }
-    DisposableEffect(Unit) {
-        onDispose { player.release() }
-    }
-
-    var isPlaying by remember { mutableStateOf(player.isPlaying) }
+    val playerState = remember { mutableStateOf<ExoPlayer?>(null) }
+    var isPlaying by remember { mutableStateOf(false) }
     var positionMs by remember { mutableStateOf(0L) }
     var durationMs by remember { mutableStateOf(0L) }
     var scrubbing by remember { mutableStateOf(false) }
 
+    // декодер держит только активная страница
+    LaunchedEffect(active) {
+        if (active && playerState.value == null) {
+            playerState.value = ExoPlayer.Builder(context).build().apply {
+                setMediaItem(androidx.media3.common.MediaItem.fromUri(item.uri))
+                prepare()
+                playWhenReady = true
+            }
+        }
+    }
+    LaunchedEffect(active, playerState.value) {
+        playerState.value?.let { if (active) it.play() else it.pause() }
+    }
+    DisposableEffect(Unit) {
+        onDispose { playerState.value?.release() }
+    }
+
+    val player = playerState.value
     DisposableEffect(player) {
         val listener = object : Player.Listener {
             override fun onIsPlayingChanged(playing: Boolean) {
                 isPlaying = playing
             }
+
             override fun onPlaybackStateChanged(state: Int) {
                 if (state == Player.STATE_READY) {
-                    durationMs = player.duration.coerceAtLeast(0L)
+                    durationMs = player?.duration?.coerceAtLeast(0L) ?: 0L
                 }
             }
         }
-        player.addListener(listener)
-        onDispose { player.removeListener(listener) }
+        player?.addListener(listener)
+        onDispose { player?.removeListener(listener) }
     }
 
-    LaunchedEffect(isPlaying) {
-        while (isPlaying) {
+    LaunchedEffect(isPlaying, player) {
+        while (isPlaying && player != null) {
             positionMs = player.currentPosition
-            delay(250)
+            delay(200)
         }
     }
 
@@ -315,21 +439,41 @@ private fun VideoPage(item: MediaItem, active: Boolean, onTap: () -> Unit, chrom
     ) {
         AndroidView(
             factory = { ctx ->
-                PlayerView(ctx).apply {
+                (android.view.LayoutInflater.from(ctx)
+                    .inflate(R.layout.view_player, null) as PlayerView).apply {
                     useController = false
-                    resizeMode = AspectRatioFrameLayout.RESIZE_MODE_FIT
-                    this.player = player
                 }
             },
+            update = { view -> view.player = playerState.value },
             modifier = Modifier.fillMaxSize(),
         )
 
+        if (!active && !isPlaying) {
+            Box(
+                Modifier.align(Alignment.Center)
+                    .size(56.dp)
+                    .background(Color.Black.copy(alpha = 0.32f), CircleShape)
+                    .border(1.dp, Color.White.copy(alpha = 0.3f), CircleShape),
+                contentAlignment = Alignment.Center,
+            ) {
+                Icon(Icons.Rounded.PlayArrow, null, tint = Color.White, modifier = Modifier.size(30.dp))
+            }
+        }
+
+        if (active && durationMs == 0L) {
+            CircularProgressIndicator(
+                color = Color.White,
+                strokeWidth = 2.dp,
+                modifier = Modifier.align(Alignment.Center).size(30.dp),
+            )
+        }
+
         // M3E-контролы
         AnimatedVisibility(
-            visible = chrome,
+            visible = chrome && active,
             modifier = Modifier
                 .align(Alignment.BottomCenter)
-                .padding(start = 20.dp, end = 20.dp, bottom = 92.dp),
+                .padding(start = 20.dp, end = 20.dp, bottom = 112.dp),
             enter = fadeIn() + slideInVertically { it / 2 },
             exit = fadeOut() + slideOutVertically { it / 2 },
         ) {
@@ -337,10 +481,10 @@ private fun VideoPage(item: MediaItem, active: Boolean, onTap: () -> Unit, chrom
                 val fraction = if (durationMs > 0) {
                     (positionMs.toFloat() / durationMs).coerceIn(0f, 1f)
                 } else 0f
-                // сглаживаем опрос 100мс → плавная полоса; при скрабе — честное значение
+                // сглаживаем опрос 200мс → плавная полоса; при скрабе — честное значение
                 val smooth by animateFloatAsState(
                     targetValue = fraction,
-                    animationSpec = tween(100, easing = LinearEasing),
+                    animationSpec = tween(200, easing = LinearEasing),
                     label = "vidPos",
                 )
                 Slider(
@@ -353,7 +497,7 @@ private fun VideoPage(item: MediaItem, active: Boolean, onTap: () -> Unit, chrom
                     },
                     onValueChangeFinished = {
                         scrubbing = false
-                        player.seekTo(positionMs)
+                        playerState.value?.seekTo(positionMs)
                     },
                     colors = SliderDefaults.colors(
                         thumbColor = Color.White,
@@ -372,7 +516,8 @@ private fun VideoPage(item: MediaItem, active: Boolean, onTap: () -> Unit, chrom
                     )
                     Spacer(Modifier.weight(1f))
                     PlayPauseCookie(playing = isPlaying) {
-                        if (isPlaying) player.pause() else player.play()
+                        val p = playerState.value ?: return@PlayPauseCookie
+                        if (isPlaying) p.pause() else p.play()
                     }
                     Spacer(Modifier.weight(1f))
                     Text(

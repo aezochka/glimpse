@@ -8,6 +8,7 @@ class GlimpseApp : Application() {
 
     override fun onCreate() {
         super.onCreate()
+        CrashLog.install(this)
         repository = MediaRepository(this)
     }
 }
